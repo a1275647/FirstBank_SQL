@@ -1,4 +1,4 @@
-# Country rating TVP / BMI Core deployment
+# Country rating TVP / BMI deployment and formal cutover
 
 ## Preconditions
 
@@ -6,7 +6,7 @@
 - Take the normal database deployment backup/snapshot before applying the scripts.
 - Do not run these scripts against an environment unless that environment and maintenance window have been explicitly approved.
 
-## Required order
+## Ticket 02 compatibility deployment
 
 1. Run `CountryRatingResultType.sql` to create or validate `dbo.CountryRatingResultType`.
 2. Run `StoredProcedure/usp_BmiRatingCount_Core.sql` to create the TVP-based Core procedure.
@@ -15,8 +15,38 @@
 
 All three scripts are safe to run repeatedly. The type script never drops an existing type; it stops with an error if the existing contract differs. Both procedures use `CREATE OR ALTER`.
 
+## Ticket 03 formal cutover
+
+Do not perform the formal cutover until the country-rating parity evidence has
+no unexplained differences and the target environment has completed the
+required BMI comparison and representative schedule observation.
+
+The formal cutover must be applied in this order:
+
+1. Confirm `dbo.CountryRatingResultType` and
+   `dbo.usp_BmiRatingCount_Core` already exist with the Ticket 02 contracts.
+2. Run `StoredProcedure/usp_BmiRatingCount.sql`. This changes the formal
+   procedure to require `@Date` and `@CountryRatings` and delegate to Core.
+3. Deploy the Ticket 03 AP build, whose executor calls
+   `dbo.usp_BmiRatingCount @Date, @CountryRatings`.
+
+SQL must be applied before the Ticket 03 AP build. The previous Ticket 02 AP
+continues to call Core directly while step 2 is being applied, so this order
+does not create an incompatible window. Deploying the new AP first would make
+it call a formal procedure that still has the old no-argument signature.
+
+The Ticket 03 procedure script uses `CREATE OR ALTER` and is safe to run
+repeatedly after its type/Core prerequisites are present. It does not call
+`GETDATE()` or `dbo.ufn_table_GetCountryRating`.
+
 ## Rollback
 
-Before the AP cutover is accepted, switch AP callers back to parameterless `EXEC dbo.usp_BmiRatingCount`. The compatibility wrapper continues to populate the TVP from `dbo.ufn_table_GetCountryRating` and delegates the complete BMI implementation to Core, so no SQL object needs to be recreated for this rollback.
+Rollback the AP build first. The Ticket 02 AP calls Core directly and therefore
+works with either formal-procedure signature. If the database contract must
+also be restored, then run
+`Rollback/usp_BmiRatingCount_Ticket02_CompatibilityWrapper.sql`; this restores
+the no-argument wrapper that resolves the date once, populates the TVP from the
+legacy function, and delegates to Core.
 
-Do not remove the Core procedure, compatibility wrapper, table type, or legacy function in this ticket. Their retirement is gated by the later parity and observation tickets.
+Do not remove Core, the table type, or the legacy function in Ticket 03. Their
+retirement is the separate Ticket 04 irreversible cleanup.

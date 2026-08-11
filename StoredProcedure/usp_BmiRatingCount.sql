@@ -5,19 +5,14 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
--- 相容 wrapper：舊版 AP 可繼續使用 EXEC dbo.usp_BmiRatingCount。
--- 此程序只解析一次日期並將 legacy function 結果轉成 Core 所需的完整 TVP。
+-- 正式 AP 契約：部署前須先建立 dbo.CountryRatingResultType 與
+-- dbo.usp_BmiRatingCount_Core。此程序不再解析系統日期或重算國家評等。
 CREATE OR ALTER PROCEDURE [dbo].[usp_BmiRatingCount]
+    @Date DATE,
+    @CountryRatings [dbo].[CountryRatingResultType] READONLY
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    DECLARE @Date DATE = CONVERT(DATE, GETDATE());
-    DECLARE @CountryRatings [dbo].[CountryRatingResultType];
-
-    INSERT INTO @CountryRatings (FK_Country_Id, FinalRating, Score)
-    SELECT FK_Country_Id, FinalRating, Score
-    FROM [dbo].[ufn_table_GetCountryRating](@Date);
 
     EXEC [dbo].[usp_BmiRatingCount_Core]
         @Date = @Date,
