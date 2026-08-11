@@ -50,13 +50,18 @@ There are two rollback depths:
    the no-argument wrapper. This is a safe bridge, but it does not by itself
    restore legacy country-rating behavior because the Ticket 02 AP still calls
    Core directly.
-2. To roll back an AP country-rating or TVP defect fully to legacy behavior,
-   complete step 1 and then deploy the pre-Ticket 02 / Ticket 01 CreditRatings
-   build (`787600c`). That build calls the restored no-argument wrapper, which
-   populates the TVP from the legacy function before delegating to Core. Keep
-   the Ticket 01 API build (`8d31a0e`) paired with it when rolling back the
-   shared service contract. This sequence avoids an incompatible caller window
-   and makes the legacy function the effective country-rating source again.
+2. To restore only the BMI country-rating source to the legacy function while
+   retaining the AP calculator for `CreditRating_Country_M`, complete step 1
+   and deploy the Ticket 01 CreditRatings/API pair (`787600c` / `8d31a0e`).
+   Its BMI caller uses the restored no-argument wrapper, but its daily country
+   settlement still uses the AP calculator; this is not a full AP rollback.
+3. To roll back an AP country-rating or TVP defect fully to legacy behavior,
+   complete step 1 and deploy the verified pre-Ticket 01 API/CreditRatings pair
+   (`0df6635e` / `a9840c2`). The API helper in that pair calculates and persists
+   `CreditRating_Country_M` from the legacy function, while CreditRatings calls
+   the restored no-argument wrapper for BMI. This sequence avoids an
+   incompatible caller window and makes the legacy function the effective
+   country-rating source for both downstream paths.
 
 Do not remove Core, the table type, or the legacy function in Ticket 03. Their
 retirement is the separate Ticket 04 irreversible cleanup.
