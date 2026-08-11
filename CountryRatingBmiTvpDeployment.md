@@ -41,12 +41,22 @@ repeatedly after its type/Core prerequisites are present. It does not call
 
 ## Rollback
 
-Rollback the AP build first. The Ticket 02 AP calls Core directly and therefore
-works with either formal-procedure signature. If the database contract must
-also be restored, then run
-`Rollback/usp_BmiRatingCount_Ticket02_CompatibilityWrapper.sql`; this restores
-the no-argument wrapper that resolves the date once, populates the TVP from the
-legacy function, and delegates to Core.
+There are two rollback depths:
+
+1. To roll back only the Ticket 03 formal caller/contract, first deploy the
+   Ticket 02 AP build. It calls Core directly and therefore works with either
+   formal-procedure signature. Then run
+   `Rollback/usp_BmiRatingCount_Ticket02_CompatibilityWrapper.sql` to restore
+   the no-argument wrapper. This is a safe bridge, but it does not by itself
+   restore legacy country-rating behavior because the Ticket 02 AP still calls
+   Core directly.
+2. To roll back an AP country-rating or TVP defect fully to legacy behavior,
+   complete step 1 and then deploy the pre-Ticket 02 / Ticket 01 CreditRatings
+   build (`787600c`). That build calls the restored no-argument wrapper, which
+   populates the TVP from the legacy function before delegating to Core. Keep
+   the Ticket 01 API build (`8d31a0e`) paired with it when rolling back the
+   shared service contract. This sequence avoids an incompatible caller window
+   and makes the legacy function the effective country-rating source again.
 
 Do not remove Core, the table type, or the legacy function in Ticket 03. Their
 retirement is the separate Ticket 04 irreversible cleanup.
