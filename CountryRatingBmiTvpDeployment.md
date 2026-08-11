@@ -41,7 +41,7 @@ repeatedly after its type/Core prerequisites are present. It does not call
 
 ## Rollback
 
-There are two rollback depths:
+There are three rollback depths:
 
 1. To roll back only the Ticket 03 formal caller/contract, first deploy the
    Ticket 02 AP build. It calls Core directly and therefore works with either
