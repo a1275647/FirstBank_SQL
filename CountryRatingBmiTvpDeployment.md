@@ -1,67 +1,67 @@
-# Country rating TVP / BMI deployment and formal cutover
+# Country rating TVP / BMI direct cutover
 
 ## Preconditions
 
-- Target database is `NCRMS` and the existing `dbo.ufn_table_GetCountryRating` and `dbo.usp_BmiRatingCount` objects are available.
-- Take the normal database deployment backup/snapshot before applying the scripts.
-- Do not run these scripts against an environment unless that environment and maintenance window have been explicitly approved.
+- Target database is `NCRMS`; the existing `dbo.usp_BmiRatingCount` and
+  `dbo.ufn_table_GetCountryRating` objects are available.
+- Take the normal database deployment backup/snapshot before applying scripts.
+- Reserve one maintenance window in which the CreditRatings jobs remain paused.
+- Do not run these scripts unless the target environment and window have been
+  explicitly approved.
 
-## Ticket 02 compatibility deployment
+## Deployment
 
-1. Run `20260811/CountryRatingResultType.sql` to create or validate `dbo.CountryRatingResultType`.
-2. Run `20260811/StoredProcedure/usp_BmiRatingCount_Core.sql` to create the TVP-based Core procedure.
-3. Run `20260811/Rollback/usp_BmiRatingCount_Ticket02_CompatibilityWrapper.sql` to replace the legacy procedure with the no-argument compatibility wrapper.
-4. Deploy the AP changes only after all three database objects are available.
+This delivery changes only the existing `dbo.usp_BmiRatingCount`; it does not
+create `dbo.usp_BmiRatingCount_Core` or another BMI stored procedure.
 
-All three scripts are safe to run repeatedly. The type script never drops an existing type; it stops with an error if the existing contract differs. Both procedures use `CREATE OR ALTER`.
+Apply the release in this order:
 
-## Ticket 03 formal cutover
+1. Pause every application job or caller that can execute
+   `dbo.usp_BmiRatingCount`.
+2. Run `20260811/CountryRatingResultType.sql` to create or validate
+   `dbo.CountryRatingResultType`.
+3. Run `20260811/StoredProcedure/usp_BmiRatingCount.sql`. It changes the
+   existing procedure to accept `@Date` plus the readonly country-rating TVP
+   and contains the complete BMI calculation body.
+4. Deploy the matching FirstBank API and CreditRatings builds.
+5. Verify the procedure signature and one approved non-production schedule run
+   before resuming normal jobs.
 
-Do not perform the formal cutover until the country-rating parity evidence has
-no unexplained differences and the target environment has completed the
-required BMI comparison and representative schedule observation.
+The type and procedure scripts are safe to run repeatedly after their stated
+prerequisites are met. The procedure reads country ratings only from the TVP;
+it does not call `GETDATE()` to choose the business date and does not call
+`dbo.ufn_table_GetCountryRating`.
 
-The formal cutover must be applied in this order:
+## Compatibility window
 
-1. Confirm `dbo.CountryRatingResultType` and
-   `dbo.usp_BmiRatingCount_Core` already exist with the Ticket 02 contracts.
-2. Run `20260811/StoredProcedure/usp_BmiRatingCount.sql`. This changes the formal
-   procedure to require `@Date` and `@CountryRatings` and delegate to Core.
-3. Deploy the Ticket 03 AP build, whose executor calls
-   `dbo.usp_BmiRatingCount @Date, @CountryRatings`.
+SQL Server cannot overload one procedure name with both the old no-argument
+signature and the new `@Date + TVP` signature. Because no compatibility/Core
+procedure is introduced, the old application and new database contract are not
+cross-compatible. Keep callers paused while steps 2–4 are performed; do not
+deploy the database and application independently outside the same maintenance
+window.
 
-SQL must be applied before the Ticket 03 AP build. The previous Ticket 02 AP
-continues to call Core directly while step 2 is being applied, so this order
-does not create an incompatible window. Deploying the new AP first would make
-it call a formal procedure that still has the old no-argument signature.
+## Validation
 
-The Ticket 03 procedure script uses `CREATE OR ALTER` and is safe to run
-repeatedly after its type/Core prerequisites are present. It does not call
-`GETDATE()` or `dbo.ufn_table_GetCountryRating`.
+Country-rating parity can be collected before deployment with the read-only
+observer. BMI parity must use approved pre-deployment and post-deployment
+snapshots from the same controlled non-production dataset because both stored
+procedure signatures cannot coexist under the same object name. Classify and
+resolve every difference before production cutover.
 
 ## Rollback
 
-There are three rollback depths:
+Rollback must restore the database and application together:
 
-1. To roll back only the Ticket 03 formal caller/contract, first deploy the
-   Ticket 02 AP build. It calls Core directly and therefore works with either
-   formal-procedure signature. Then run
-   `20260811/Rollback/usp_BmiRatingCount_Ticket02_CompatibilityWrapper.sql` to restore
-   the no-argument wrapper. This is a safe bridge, but it does not by itself
-   restore legacy country-rating behavior because the Ticket 02 AP still calls
-   Core directly.
-2. To restore only the BMI country-rating source to the legacy function while
-   retaining the AP calculator for `CreditRating_Country_M`, complete step 1
-   and deploy the Ticket 01 CreditRatings/API pair (`787600c` / `8d31a0e`).
-   Its BMI caller uses the restored no-argument wrapper, but its daily country
-   settlement still uses the AP calculator; this is not a full AP rollback.
-3. To roll back an AP country-rating or TVP defect fully to legacy behavior,
-   complete step 1 and deploy the verified pre-Ticket 01 API/CreditRatings pair
-   (`0df6635e` / `a9840c2`). The API helper in that pair calculates and persists
-   `CreditRating_Country_M` from the legacy function, while CreditRatings calls
-   the restored no-argument wrapper for BMI. This sequence avoids an
-   incompatible caller window and makes the legacy function the effective
-   country-rating source for both downstream paths.
+1. Pause all `dbo.usp_BmiRatingCount` callers.
+2. Restore the pre-deployment database backup/snapshot, or restore the legacy
+   procedure definition from FirstBank_SQL commit `9857530`
+   (`StoredProcedure/usp_BmiRatingCount.sql`).
+3. Deploy the verified pre-Ticket 01 API/CreditRatings pair
+   (`0df6635e` / `a9840c2`) when a full legacy country-rating rollback is
+   required.
+4. Validate the no-argument procedure and legacy schedule path before resuming
+   jobs.
 
-Do not remove Core, the table type, or the legacy function in Ticket 03. Their
-retirement is the separate Ticket 04 irreversible cleanup.
+The legacy function remains available for this manual rollback. Its eventual
+removal remains user-owned cleanup and is not performed by these scripts.
