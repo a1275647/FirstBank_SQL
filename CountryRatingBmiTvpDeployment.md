@@ -25,7 +25,7 @@ The formal cutover must be applied in this order:
 
 1. Confirm `dbo.CountryRatingResultType` and
    `dbo.usp_BmiRatingCount_Core` already exist with the Ticket 02 contracts.
-2. Run `StoredProcedure/usp_BmiRatingCount.sql`. This changes the formal
+2. Run `20260811/StoredProcedure/usp_BmiRatingCount.sql`. This changes the formal
    procedure to require `@Date` and `@CountryRatings` and delegate to Core.
 3. Deploy the Ticket 03 AP build, whose executor calls
    `dbo.usp_BmiRatingCount @Date, @CountryRatings`.
