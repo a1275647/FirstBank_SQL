@@ -8,9 +8,9 @@
 
 ## Ticket 02 compatibility deployment
 
-1. Run `CountryRatingResultType.sql` to create or validate `dbo.CountryRatingResultType`.
-2. Run `StoredProcedure/usp_BmiRatingCount_Core.sql` to create the TVP-based Core procedure.
-3. Run `StoredProcedure/usp_BmiRatingCount.sql` to replace the legacy procedure with the no-argument compatibility wrapper.
+1. Run `20260811/CountryRatingResultType.sql` to create or validate `dbo.CountryRatingResultType`.
+2. Run `20260811/usp_BmiRatingCount_Core.sql` to create the TVP-based Core procedure.
+3. Run `20260811/usp_BmiRatingCount_Ticket02_CompatibilityWrapper.sql` to replace the legacy procedure with the no-argument compatibility wrapper.
 4. Deploy the AP changes only after all three database objects are available.
 
 All three scripts are safe to run repeatedly. The type script never drops an existing type; it stops with an error if the existing contract differs. Both procedures use `CREATE OR ALTER`.
@@ -46,7 +46,7 @@ There are three rollback depths:
 1. To roll back only the Ticket 03 formal caller/contract, first deploy the
    Ticket 02 AP build. It calls Core directly and therefore works with either
    formal-procedure signature. Then run
-   `Rollback/usp_BmiRatingCount_Ticket02_CompatibilityWrapper.sql` to restore
+   `20260811/usp_BmiRatingCount_Ticket02_CompatibilityWrapper.sql` to restore
    the no-argument wrapper. This is a safe bridge, but it does not by itself
    restore legacy country-rating behavior because the Ticket 02 AP still calls
    Core directly.
