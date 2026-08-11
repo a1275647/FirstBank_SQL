@@ -31,6 +31,17 @@ ELSE IF
            OR (c.column_id = 2 AND c.name = N'FinalRating' AND st.name = N'int' AND c.is_nullable = 0)
            OR (c.column_id = 3 AND c.name = N'Score' AND st.name = N'int' AND c.is_nullable = 0)
        )) <> 3
+    OR
+    (SELECT COUNT(*)
+     FROM sys.table_types tt
+     INNER JOIN sys.indexes i ON i.object_id = tt.type_table_object_id
+     INNER JOIN sys.index_columns ic
+         ON ic.object_id = i.object_id
+         AND ic.index_id = i.index_id
+     WHERE tt.schema_id = SCHEMA_ID(N'dbo')
+       AND tt.name = N'CountryRatingResultType'
+       AND i.is_primary_key = 1
+       AND ic.key_ordinal > 0) <> 1
     OR NOT EXISTS
        (SELECT 1
         FROM sys.table_types tt
@@ -44,6 +55,7 @@ ELSE IF
         WHERE tt.schema_id = SCHEMA_ID(N'dbo')
           AND tt.name = N'CountryRatingResultType'
           AND i.is_primary_key = 1
+          AND ic.key_ordinal = 1
           AND c.name = N'FK_Country_Id')
 BEGIN
     THROW 51000, 'dbo.CountryRatingResultType exists but does not match the required contract.', 1;
