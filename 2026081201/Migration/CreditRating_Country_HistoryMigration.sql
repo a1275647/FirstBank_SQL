@@ -109,7 +109,7 @@ IF EXISTS
             target_row.[FK_CreditRatingCountryLogId], target_row.[FK_Country_Id],
             target_row.[FK_RatingAgency_Id], target_row.[AgencyRating], target_row.[RatingDate],
             target_row.[RatingOutlook], target_row.[RatingOutlookDate], target_row.[Remarks],
-            target_row.[date], target_row.[Create_date], target_row.[Create_user]
+            target_row.[updated_Date], target_row.[Create_date], target_row.[Create_user]
         INTERSECT
         SELECT
             source_parent.[PK_Id], source_row.[FK_Country_Id],
@@ -161,7 +161,7 @@ BEGIN TRY
     (
         [PK_Id], [FK_CreditRatingCountryLogId], [FK_Country_Id], [FK_RatingAgency_Id],
         [AgencyRating], [RatingDate], [RatingOutlook], [RatingOutlookDate], [Remarks],
-        [date], [Create_date], [Create_user]
+        [updated_Date], [Create_date], [Create_user]
     )
     SELECT
         source_row.[PK_Id], source_parent.[PK_Id], source_row.[FK_Country_Id],

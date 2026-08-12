@@ -11,7 +11,7 @@ BEGIN
         [PK_Id]        int          IDENTITY(1, 1) NOT NULL,
         [FK_CountryId] int                         NOT NULL,
         [Score]        int                         NOT NULL,
-        [Create_date]  datetime2(7)                NOT NULL,
+        [Create_date]  datetime                   NOT NULL,
         CONSTRAINT [PK_CreditRating_Country_Log]
             PRIMARY KEY CLUSTERED ([PK_Id]),
         CONSTRAINT [UQ_CreditRating_Country_Log_Country_CreateDate]
@@ -63,8 +63,8 @@ BEGIN
               FROM sys.columns AS c
               INNER JOIN sys.types AS t ON t.user_type_id = c.user_type_id
               WHERE c.[object_id] = OBJECT_ID(N'[dbo].[CreditRating_Country_Log]')
-                AND c.[name] = N'Create_date' AND t.[name] = N'datetime2'
-                AND c.scale = 7 AND c.is_nullable = 0
+                AND c.[name] = N'Create_date' AND t.[name] = N'datetime'
+                AND c.is_nullable = 0
           )
         THROW 51001, N'dbo.CreditRating_Country_Log 已存在，但欄位結構不符合本批次定義。', 1;
 

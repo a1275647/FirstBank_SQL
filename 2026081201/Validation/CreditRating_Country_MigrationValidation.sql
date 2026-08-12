@@ -12,7 +12,7 @@ IF OBJECT_ID(N'[dbo].[CreditRating_Country_M]', N'U') IS NULL
     THROW 51200, N'來源表或目標表不存在，無法驗證。', 1;
 
 IF COL_LENGTH(N'dbo.CountryMaster', N'CreditRatingScore') IS NULL
-   OR COL_LENGTH(N'dbo.CountryMaster', N'CreditRatingScoreDate') IS NULL
+   OR COL_LENGTH(N'dbo.CountryMaster', N'CreditRatingScorePublishedAt') IS NULL
     THROW 51201, N'CountryMaster 的信評分數欄位尚未建立。', 1;
 
 IF EXISTS
@@ -48,7 +48,7 @@ IF EXISTS
                   target_row.[FK_CreditRatingCountryLogId], target_row.[FK_Country_Id],
                   target_row.[FK_RatingAgency_Id], target_row.[AgencyRating], target_row.[RatingDate],
                   target_row.[RatingOutlook], target_row.[RatingOutlookDate], target_row.[Remarks],
-                  target_row.[date], target_row.[Create_date], target_row.[Create_user]
+                  target_row.[updated_Date], target_row.[Create_date], target_row.[Create_user]
               INTERSECT
               SELECT
                   source_parent.[PK_Id], source_row.[FK_Country_Id],
@@ -82,10 +82,10 @@ BEGIN
     (
         SELECT 1
         FROM [dbo].[CountryMaster]
-        WHERE [CreditRatingScore] IS NOT NULL
-           OR [CreditRatingScoreDate] IS NOT NULL
+        WHERE [CreditRatingScore] <> 5
+           OR [CreditRatingScorePublishedAt] IS NOT NULL
     )
-        THROW 51206, N'首次部署時 CountryMaster 信評分數與日期應維持 NULL。', 1;
+        THROW 51206, N'首次部署時 CountryMaster 信評分數應維持預設值 5，發布時間應維持 NULL。', 1;
 END;
 
 SELECT
@@ -97,4 +97,4 @@ SELECT
      WHERE EXISTS (SELECT 1 FROM [dbo].[CreditRating_Country] AS source_row WHERE source_row.[PK_Id] = target_row.[PK_Id])) AS [MigratedDetailCount],
     (SELECT COUNT_BIG(*) FROM [dbo].[CreditRating_Country_Current]) AS [CurrentCount],
     (SELECT COUNT_BIG(*) FROM [dbo].[CountryMaster]
-     WHERE [CreditRatingScore] IS NOT NULL OR [CreditRatingScoreDate] IS NOT NULL) AS [InitializedCountryScoreCount];
+     WHERE [CreditRatingScore] <> 5 OR [CreditRatingScorePublishedAt] IS NOT NULL) AS [InitializedCountryScoreCount];
