@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1300" viewBox="0 0 1800 1300" role="img" aria-labelledby="title description">
+  <title id="title">國家信用評等資料表關聯圖</title>
+  <desc id="description">顯示 CountryMaster、CreditRatingMaster、CreditRating_Country_Log、CreditRating_Country_Log_Detail、CreditRating_Country_Current 與兩張舊表之間的外鍵及搬移關係。Current 與 Log Detail 沒有外鍵。</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; fill: #172033; }
+      .title { font-size: 34px; font-weight: 700; }
+      .subtitle { font-size: 18px; fill: #536078; }
+      .table { fill: #ffffff; stroke: #8c9bb3; stroke-width: 2; rx: 12; }
+      .table-old { fill: #f7f8fa; stroke: #a5adba; stroke-width: 2; stroke-dasharray: 10 7; rx: 12; }
+      .header { fill: #2457a6; }
+      .header-master { fill: #176b62; }
+      .header-current { fill: #8b4c16; }
+      .header-old { fill: #667085; }
+      .header-text { fill: #ffffff; font-size: 21px; font-weight: 700; }
+      .field { font-size: 17px; }
+      .field-muted { font-size: 15px; fill: #667085; }
+      .key-pk { fill: #9f1239; font-weight: 700; }
+      .key-fk { fill: #1d4ed8; font-weight: 700; }
+      .constraint { fill: #6b3fa0; font-size: 15px; font-weight: 600; }
+      .divider { stroke: #d8dee9; stroke-width: 1; }
+      .fk-line { fill: none; stroke: #2457a6; stroke-width: 3; marker-end: url(#arrow); }
+      .migration-line { fill: none; stroke: #667085; stroke-width: 3; stroke-dasharray: 10 7; marker-end: url(#arrow-muted); }
+      .cancel-line { fill: none; stroke: #c62828; stroke-width: 3; stroke-dasharray: 8 6; }
+      .edge-label { font-size: 15px; fill: #2457a6; font-weight: 700; }
+      .migration-label { font-size: 15px; fill: #596275; font-weight: 700; }
+      .cancel-label { font-size: 16px; fill: #a61b1b; font-weight: 700; }
+      .note { fill: #fff7ed; stroke: #d97706; stroke-width: 2; rx: 10; }
+      .note-text { font-size: 16px; fill: #8b4c16; font-weight: 600; }
+      .legend { font-size: 16px; fill: #475467; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2457a6"/>
+    </marker>
+    <marker id="arrow-muted" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#667085"/>
+    </marker>
+  </defs>
+
+  <rect width="1800" height="1300" fill="#f5f7fb"/>
+  <text class="title" x="60" y="52">國家信用評等資料表關聯圖</text>
+  <text class="subtitle" x="60" y="82">2026081201 schema 規劃｜實線為外鍵，灰色虛線為歷史資料搬移</text>
+
+  <!-- Relationships are drawn behind the table cards. -->
+  <path class="fk-line" d="M460 190 H650"/>
+  <text class="edge-label" x="505" y="180">1 對多</text>
+
+  <path class="fk-line" d="M260 330 V390 H550 V525"/>
+  <text class="edge-label" x="275" y="380">1 對多</text>
+
+  <path class="fk-line" d="M900 325 V430"/>
+  <text class="edge-label" x="915" y="390">1 對多</text>
+
+  <path class="fk-line" d="M1370 200 H1245 V585 H1210"/>
+  <text class="edge-label" x="1255" y="560">1 對多</text>
+
+  <path class="fk-line" d="M460 285 H500 V380 H1260 V545 H1280"/>
+  <text class="edge-label" x="1110" y="370">CountryMaster 1 對多</text>
+
+  <path class="fk-line" d="M1555 285 V420"/>
+  <text class="edge-label" x="1570" y="360">1 對多</text>
+
+  <path class="migration-line" d="M430 600 H500 V285 H650"/>
+  <text class="migration-label" x="455" y="580">全量搬移</text>
+
+  <path class="migration-line" d="M460 960 H505 V735 H550"/>
+  <text class="migration-label" x="470" y="940">全量搬移</text>
+
+  <!-- Explicitly show the removed relationship without implying a live FK. -->
+  <path class="cancel-line" d="M1210 780 H1280"/>
+  <line x1="1238" y1="765" x2="1258" y2="795" stroke="#c62828" stroke-width="4"/>
+  <line x1="1258" y1="765" x2="1238" y2="795" stroke="#c62828" stroke-width="4"/>
+  <text class="cancel-label" x="1218" y="825">無外鍵</text>
+
+  <!-- CountryMaster -->
+  <g>
+    <rect class="table" x="60" y="110" width="400" height="220"/>
+    <path class="header-master" d="M72 110 H448 A12 12 0 0 1 460 122 V158 H60 V122 A12 12 0 0 1 72 110 Z"/>
+    <text class="header-text" x="82" y="143">CountryMaster</text>
+    <text class="field" x="84" y="190"><tspan class="key-pk">PK</tspan><tspan dx="16">PK_Id</tspan><tspan dx="18" class="field-muted">int</tspan></text>
+    <line class="divider" x1="80" y1="210" x2="440" y2="210"/>
+    <text class="field" x="84" y="240">CreditRatingScore <tspan class="field-muted">tinyint NOT NULL DEFAULT 5</tspan></text>
+    <text class="field" x="84" y="278">CreditRatingScorePublishedAt</text>
+    <text class="field-muted" x="84" y="304">datetime NULL</text>
+  </g>
+
+  <!-- CreditRating Country Log -->
+  <g>
+    <rect class="table" x="650" y="110" width="500" height="215"/>
+    <path class="header" d="M662 110 H1138 A12 12 0 0 1 1150 122 V158 H650 V122 A12 12 0 0 1 662 110 Z"/>
+    <text class="header-text" x="674" y="143">CreditRating_Country_Log</text>
+    <text class="field" x="674" y="190"><tspan class="key-pk">PK</tspan><tspan dx="16">PK_Id</tspan><tspan dx="18" class="field-muted">int IDENTITY</tspan></text>
+    <text class="field" x="674" y="222"><tspan class="key-fk">FK</tspan><tspan dx="16">FK_CountryId</tspan><tspan dx="18" class="field-muted">→ CountryMaster.PK_Id</tspan></text>
+    <text class="field" x="674" y="254">Score <tspan class="field-muted">int NOT NULL</tspan></text>
+    <text class="field" x="674" y="286">Create_date <tspan class="field-muted">datetime NOT NULL</tspan></text>
+    <text class="constraint" x="920" y="314">UQ (FK_CountryId, Create_date)</text>
+  </g>
+
+  <!-- CreditRatingMaster -->
+  <g>
+    <rect class="table" x="1370" y="110" width="370" height="175"/>
+    <path class="header-master" d="M1382 110 H1728 A12 12 0 0 1 1740 122 V158 H1370 V122 A12 12 0 0 1 1382 110 Z"/>
+    <text class="header-text" x="1394" y="143">CreditRatingMaster</text>
+    <text class="field" x="1394" y="192"><tspan class="key-pk">PK</tspan><tspan dx="16">PK_ID</tspan><tspan dx="18" class="field-muted">int</tspan></text>
+    <text class="field" x="1394" y="226">AgencyCode <tspan class="field-muted">nvarchar</tspan></text>
+    <text class="field" x="1394" y="258">AgencyName <tspan class="field-muted">nvarchar</tspan></text>
+  </g>
+
+  <!-- Legacy score table -->
+  <g>
+    <rect class="table-old" x="60" y="500" width="370" height="200"/>
+    <path class="header-old" d="M72 500 H418 A12 12 0 0 1 430 512 V548 H60 V512 A12 12 0 0 1 72 500 Z"/>
+    <text class="header-text" x="82" y="533">CreditRating_Country_M（舊）</text>
+    <text class="field" x="84" y="580"><tspan class="key-pk">PK</tspan><tspan dx="16">PK_Id</tspan><tspan dx="18" class="field-muted">int</tspan></text>
+    <text class="field" x="84" y="614">FK_CountryId <tspan class="field-muted">int</tspan></text>
+    <text class="field" x="84" y="648">Score <tspan class="field-muted">int</tspan></text>
+    <text class="field" x="84" y="682">Create_date <tspan class="field-muted">datetime</tspan></text>
+  </g>
+
+  <!-- Log Detail -->
+  <g>
+    <rect class="table" x="550" y="430" width="660" height="500"/>
+    <path class="header" d="M562 430 H1198 A12 12 0 0 1 1210 442 V478 H550 V442 A12 12 0 0 1 562 430 Z"/>
+    <text class="header-text" x="574" y="463">CreditRating_Country_Log_Detail</text>
+    <text class="field" x="574" y="510"><tspan class="key-pk">PK</tspan><tspan dx="16">PK_Id</tspan><tspan dx="18" class="field-muted">int IDENTITY</tspan></text>
+    <text class="field" x="574" y="542"><tspan class="key-fk">FK</tspan><tspan dx="16">FK_CreditRatingCountryLogId</tspan><tspan dx="18" class="field-muted">→ Log.PK_Id</tspan></text>
+    <text class="field" x="574" y="574"><tspan class="key-fk">FK</tspan><tspan dx="16">FK_Country_Id</tspan><tspan dx="18" class="field-muted">→ CountryMaster.PK_Id</tspan></text>
+    <text class="field" x="574" y="606"><tspan class="key-fk">FK</tspan><tspan dx="16">FK_RatingAgency_Id</tspan><tspan dx="18" class="field-muted">→ CreditRatingMaster.PK_ID</tspan></text>
+    <line class="divider" x1="574" y1="626" x2="1186" y2="626"/>
+    <text class="field" x="574" y="656">AgencyRating <tspan class="field-muted">nvarchar(20) NOT NULL</tspan></text>
+    <text class="field" x="574" y="688">RatingDate <tspan class="field-muted">datetime NOT NULL</tspan></text>
+    <text class="field" x="574" y="720">RatingOutlook <tspan class="field-muted">nvarchar(50) NULL</tspan></text>
+    <text class="field" x="574" y="752">RatingOutlookDate <tspan class="field-muted">datetime NULL</tspan></text>
+    <text class="field" x="574" y="784">Remarks <tspan class="field-muted">nvarchar(500) NULL</tspan></text>
+    <text class="field" x="574" y="816">updated_Date <tspan class="field-muted">datetime NOT NULL</tspan></text>
+    <text class="field" x="574" y="848">Create_date <tspan class="field-muted">datetime NOT NULL</tspan></text>
+    <text class="field" x="574" y="880">Create_user <tspan class="field-muted">nvarchar(20) NULL</tspan></text>
+    <text class="constraint" x="574" y="914">UQ (FK_CreditRatingCountryLogId, FK_RatingAgency_Id)</text>
+  </g>
+
+  <!-- Current -->
+  <g>
+    <rect class="table" x="1280" y="420" width="460" height="510"/>
+    <path class="header-current" d="M1292 420 H1728 A12 12 0 0 1 1740 432 V468 H1280 V432 A12 12 0 0 1 1292 420 Z"/>
+    <text class="header-text" x="1304" y="453">CreditRating_Country_Current</text>
+    <text class="field" x="1304" y="500"><tspan class="key-pk">PK</tspan><tspan dx="16">PK_Id</tspan><tspan dx="18" class="field-muted">int IDENTITY</tspan></text>
+    <text class="field" x="1304" y="532"><tspan class="key-fk">FK</tspan><tspan dx="16">FK_Country_Id</tspan><tspan dx="18" class="field-muted">→ CountryMaster</tspan></text>
+    <text class="field" x="1304" y="564"><tspan class="key-fk">FK</tspan><tspan dx="16">FK_RatingAgency_Id</tspan><tspan dx="18" class="field-muted">→ CreditRatingMaster</tspan></text>
+    <line class="divider" x1="1304" y1="584" x2="1716" y2="584"/>
+    <text class="field" x="1304" y="614">AgencyRating <tspan class="field-muted">nvarchar(20)</tspan></text>
+    <text class="field" x="1304" y="646">RatingDate <tspan class="field-muted">datetime</tspan></text>
+    <text class="field" x="1304" y="678">RatingOutlook <tspan class="field-muted">nvarchar(50) NULL</tspan></text>
+    <text class="field" x="1304" y="710">RatingOutlookDate <tspan class="field-muted">datetime NULL</tspan></text>
+    <text class="field" x="1304" y="742">Remarks <tspan class="field-muted">nvarchar(500) NULL</tspan></text>
+    <text class="field" x="1304" y="774">updated_Date <tspan class="field-muted">datetime NOT NULL</tspan></text>
+    <text class="field" x="1304" y="806">Create_date <tspan class="field-muted">datetime NOT NULL</tspan></text>
+    <text class="field" x="1304" y="838">Create_user <tspan class="field-muted">nvarchar(20) NULL</tspan></text>
+    <text class="field" x="1304" y="870">PublishedAt <tspan class="field-muted">datetime NOT NULL</tspan></text>
+    <text class="constraint" x="1304" y="908">UQ (FK_RatingAgency_Id, FK_Country_Id)</text>
+  </g>
+
+  <!-- Legacy detail table -->
+  <g>
+    <rect class="table-old" x="60" y="800" width="400" height="280"/>
+    <path class="header-old" d="M72 800 H448 A12 12 0 0 1 460 812 V848 H60 V812 A12 12 0 0 1 72 800 Z"/>
+    <text class="header-text" x="82" y="833">CreditRating_Country（舊）</text>
+    <text class="field" x="84" y="880"><tspan class="key-pk">PK</tspan><tspan dx="16">PK_Id</tspan><tspan dx="18" class="field-muted">int</tspan></text>
+    <text class="field" x="84" y="914">FK_Country_Id <tspan class="field-muted">int</tspan></text>
+    <text class="field" x="84" y="948">FK_RatingAgency_Id <tspan class="field-muted">int</tspan></text>
+    <text class="field" x="84" y="982">AgencyRating／展望／備註</text>
+    <text class="field" x="84" y="1016">date <tspan class="field-muted">date → updated_Date datetime</tspan></text>
+    <text class="field" x="84" y="1050">Create_date／Create_user</text>
+  </g>
+
+  <!-- Notes and legend -->
+  <rect class="note" x="550" y="1000" width="1190" height="110"/>
+  <text class="note-text" x="578" y="1038">Current 已取消 FK_CreditRatingCountryLogDetailId，不會因刪除 Log_Detail 而被外鍵阻擋。</text>
+  <text class="note-text" x="578" y="1072">Current 只保留 CountryMaster、CreditRatingMaster 外鍵；資料一致性由發布流程負責。</text>
+
+  <line class="fk-line" x1="550" y1="1160" x2="640" y2="1160"/>
+  <text class="legend" x="660" y="1167">資料庫外鍵</text>
+  <line class="migration-line" x1="830" y1="1160" x2="920" y2="1160"/>
+  <text class="legend" x="940" y="1167">舊表全量搬移並保留 PK</text>
+  <line class="cancel-line" x1="1250" y1="1160" x2="1340" y2="1160"/>
+  <line x1="1285" y1="1147" x2="1305" y2="1173" stroke="#c62828" stroke-width="4"/>
+  <line x1="1305" y1="1147" x2="1285" y2="1173" stroke="#c62828" stroke-width="4"/>
+  <text class="legend" x="1360" y="1167">已取消的外鍵關係</text>
+
+  <text class="subtitle" x="60" y="1250">未列出 CountryMaster 與 CreditRatingMaster 中和本次異動無關的既有欄位。</text>
+</svg>

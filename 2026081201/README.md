@@ -1,5 +1,7 @@
 # 2026081201 國家信用評等資料表切換
 
+![國家信用評等資料表關聯圖](Diagram/CreditRatingCountryTableRelations.png)
+
 ## 目的與範圍
 
 本批次建立下列資料庫結構，供後續 `CreditRatings` 程式切換使用：
