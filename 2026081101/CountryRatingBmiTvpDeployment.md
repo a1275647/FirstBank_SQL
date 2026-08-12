@@ -18,9 +18,9 @@ Apply the release in this order:
 
 1. Pause every application job or caller that can execute
    `dbo.usp_BmiRatingCount`.
-2. Run `20260811/CountryRatingResultType.sql` to create or validate
+2. Run `2026081101/CountryRatingResultType.sql` to create or validate
    `dbo.CountryRatingResultType`.
-3. Run `20260811/StoredProcedure/usp_BmiRatingCount.sql`. It changes the
+3. Run `2026081101/StoredProcedure/usp_BmiRatingCount.sql`. It changes the
    existing procedure to accept `@Date` plus the readonly country-rating TVP
    and contains the complete BMI calculation body.
 4. Deploy the matching FirstBank API and CreditRatings builds.
