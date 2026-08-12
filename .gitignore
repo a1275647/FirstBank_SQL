@@ -1,0 +1,30 @@
+# Editor and user-specific files
+.vs/
+.vscode/
+.idea/
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.sqlproj.user
+
+# Build and generated output
+[Bb]in/
+[Oo]bj/
+*.dacpac
+*.dbmdl
+*.dbproj.schemaview
+*.jfm
+
+# Local SQL Server database files
+*.mdf
+*.ldf
+*.ndf
+
+# Logs and temporary files
+*.log
+*.tmp
+*~
+.DS_Store
+Thumbs.db
