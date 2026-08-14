@@ -185,12 +185,10 @@ BEGIN TRY
     DECLARE @MaxDetailId int = (SELECT MAX([PK_Id]) FROM [dbo].[CreditRating_Country_Log_Detail]);
 
     IF @MaxLogId IS NOT NULL
-        EXEC (N'DBCC CHECKIDENT (''[dbo].[CreditRating_Country_Log]'', RESEED, '
-              + CONVERT(nvarchar(20), @MaxLogId) + N') WITH NO_INFOMSGS;');
+        DBCC CHECKIDENT (N'[dbo].[CreditRating_Country_Log]', RESEED, @MaxLogId) WITH NO_INFOMSGS;
 
     IF @MaxDetailId IS NOT NULL
-        EXEC (N'DBCC CHECKIDENT (''[dbo].[CreditRating_Country_Log_Detail]'', RESEED, '
-              + CONVERT(nvarchar(20), @MaxDetailId) + N') WITH NO_INFOMSGS;');
+        DBCC CHECKIDENT (N'[dbo].[CreditRating_Country_Log_Detail]', RESEED, @MaxDetailId) WITH NO_INFOMSGS;
 
     COMMIT TRANSACTION;
 END TRY
