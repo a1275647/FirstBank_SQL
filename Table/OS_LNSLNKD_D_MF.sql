@@ -1,0 +1,23 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+SET ANSI_PADDING ON
+GO
+CREATE TABLE [dbo].[OS_LNSLNKD_D_MF](
+	[LNSLNKD_BRANCH_NO] [char](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[LNSLNKD_DEPT_NO] [char](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[LNSLNKD_LINE_NO] [char](13) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[LNSLNKD_CUSTOMER_ID] [char](11) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[LNSLNKD_SEC_NO] [char](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[LNSLNKD_DATA_DATE] [date] NULL,
+	[LNSLNKD_EXT_DATE] [date] NULL,
+	[LNSLNKD_LOAD_DATE] [date] NULL,
+	[LNSLNKD_LOAD_TIME] [char](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[Create_date] [datetime] NOT NULL
+)
+GO
+SET ANSI_PADDING OFF
+GO
+ALTER TABLE [dbo].[OS_LNSLNKD_D_MF] ADD  CONSTRAINT [DF_OS_LNSLNKD_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
+GO

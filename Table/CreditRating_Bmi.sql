@@ -1,0 +1,63 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[CreditRating_Bmi](
+	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
+	[FK_Country_Id] [int] NOT NULL,
+	[Year] [int] NULL,
+	[BMI_GDP_REAL_PCTCH] [decimal](18, 4) NULL,
+	[BMI_GDP_NOM_USD_AVE] [decimal](38, 4) NULL,
+	[BMI_GDP_NOM_USD_PERCAP_AVE] [decimal](18, 4) NULL,
+	[BMI_GDP_C_REAL_PCTCH] [decimal](18, 4) NULL,
+	[BMI_GDP_G_REAL_PCTCH] [decimal](18, 4) NULL,
+	[BMI_GDP_I_REAL_PCTCH] [decimal](18, 4) NULL,
+	[BMI_GDP_X_REAL_PCTCH] [decimal](18, 4) NULL,
+	[BMI_GDP_M_REAL_PCTCH] [decimal](18, 4) NULL,
+	[BMI_OUTPUT_IP_PCTCH] [decimal](18, 4) NULL,
+	[BMI_INFLATION_CPI_AVE_UNIT] [decimal](18, 4) NULL,
+	[BMI_INFLATION_PPI_AVE_UNIT] [decimal](18, 4) NULL,
+	[BMI_FISCAL_BALANCE_PCTGDP] [decimal](18, 4) NULL,
+	[BMI_DEBT_GOVT_PCGDP] [decimal](18, 4) NULL,
+	[BMI_POPN_TOTAL_UNIT] [bigint] NULL,
+	[BMI_LABOUR_UNEMP_PCT_AVE_UNIT] [decimal](18, 4) NULL,
+	[BMI_BOP_CA_BAL_GCU] [decimal](38, 4) NULL,
+	[BMI_BOP_CA_BAL_PCGDP] [decimal](18, 4) NULL,
+	[BMI_BOP_GS_NX_GCU] [decimal](38, 4) NULL,
+	[BMI_BOP_GS_NX_PCGDP] [decimal](18, 4) NULL,
+	[BMI_BOP_G_X_GCU] [decimal](38, 4) NULL,
+	[BMI_BOP_G_M_GCU] [decimal](38, 4) NULL,
+	[BMI_FX_LCU_USD_AVE_UNIT] [decimal](18, 6) NULL,
+	[BMI_RESERVES_EXGOLD_GCU] [decimal](38, 4) NULL,
+	[BMI_RESERVES_IMPCOVER] [decimal](18, 4) NULL,
+	[BMI_DEBT_EXT_GCU] [decimal](38, 4) NULL,
+	[BMI_DEBT_EXT_PCGDP] [decimal](18, 4) NULL,
+	[BMI_DEBT_EXT_ST_GCU] [decimal](38, 4) NULL,
+	[BMI_DEBT_EXT_ST_PCTEXTDEBT] [decimal](18, 4) NULL,
+	[BMI_DEBT_EXT_ST_PCTRESERVES] [decimal](18, 4) NULL,
+	[BMI_DEBT_EXT_SERV_GCU] [decimal](38, 4) NULL,
+	[BMI_INDEX_POLRISK_UNIT_50046_E] [decimal](18, 4) NULL,
+	[BMI_INDEX_POLRISK_SECURITY_UNIT_10012_E] [decimal](18, 4) NULL,
+	[Update_date] [datetime] NOT NULL,
+	[Update_user] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[Create_date] [datetime] NOT NULL,
+	[Create_user] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+ CONSTRAINT [PK_BMICountryRisk] PRIMARY KEY CLUSTERED
+(
+	[PK_Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+GO
+CREATE NONCLUSTERED INDEX [IX_Bmi_CountryYear] ON [dbo].[CreditRating_Bmi]
+(
+	[FK_Country_Id] ASC,
+	[Year] ASC
+)
+INCLUDE([BMI_GDP_NOM_USD_AVE],[BMI_GDP_REAL_PCTCH],[BMI_INFLATION_CPI_AVE_UNIT],[BMI_LABOUR_UNEMP_PCT_AVE_UNIT],[BMI_RESERVES_IMPCOVER],[BMI_DEBT_EXT_PCGDP],[BMI_DEBT_EXT_ST_PCTEXTDEBT],[BMI_FISCAL_BALANCE_PCTGDP],[BMI_DEBT_GOVT_PCGDP],[BMI_INDEX_POLRISK_UNIT_50046_E],[BMI_INDEX_POLRISK_SECURITY_UNIT_10012_E]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+GO
+ALTER TABLE [dbo].[CreditRating_Bmi] ADD  CONSTRAINT [DF_BMICountryRisk_Update_date]  DEFAULT (getdate()) FOR [Update_date]
+GO
+ALTER TABLE [dbo].[CreditRating_Bmi] ADD  CONSTRAINT [DF_BMICountryRisk_Create_date]  DEFAULT (getdate()) FOR [Create_date]
+GO
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'年' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'CreditRating_Bmi', @level2type=N'COLUMN',@level2name=N'Year'
+GO

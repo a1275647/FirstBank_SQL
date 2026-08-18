@@ -1,0 +1,18 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[CDS](
+	[CountryCode2] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
+	[CDS_date] [date] NOT NULL,
+	[CountryName] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
+	[CDS_Value] [decimal](18, 3) NOT NULL,
+	[Create_date] [datetime] NOT NULL,
+ CONSTRAINT [PK_CDS_1] PRIMARY KEY CLUSTERED
+(
+	[CountryCode2] ASC,
+	[CDS_date] ASC,
+	[CountryName] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+GO
