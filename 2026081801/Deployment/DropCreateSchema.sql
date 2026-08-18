@@ -1,282 +1,437 @@
+-- SSMS ready-to-run instructions:
+--   1. Connect to the intended production SQL Server.
+--   2. Select Query > SQLCMD Mode.
+--   3. Press F5 without selecting only part of this file.
+-- No script edits are required. This file performs a destructive schema rebuild of database NCRMS.
 :ON ERROR EXIT
 :setvar TargetDatabase "NCRMS"
-:setvar AllowDataLoss "0"
+:setvar ConfirmDestructiveRebuild "1"
 
 USE [$(TargetDatabase)];
 GO
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 GO
-IF DB_NAME() <> N'$(TargetDatabase)' THROW 51000, 'Target database mismatch.', 1;
+IF DB_NAME() <> N'$(TargetDatabase)'
+    THROW 51000, 'Target database mismatch.', 1;
 GO
-CREATE TABLE #ExpectedEfTables ([SchemaName] sysname COLLATE DATABASE_DEFAULT NOT NULL, [TableName] sysname COLLATE DATABASE_DEFAULT NOT NULL, PRIMARY KEY ([SchemaName], [TableName]));
-INSERT INTO #ExpectedEfTables ([SchemaName], [TableName]) VALUES
-    (N'dbo', N'ACNOD_STG'),
-    (N'dbo', N'ACOLRT_STG'),
-    (N'dbo', N'ARS_SUKBDO_D_MF'),
-    (N'dbo', N'ARS_SUKFRA_D_MF'),
-    (N'dbo', N'ARS_SUKIRO_D_MF'),
-    (N'dbo', N'ARS_SUKMST_D_MF'),
-    (N'dbo', N'ARS_SUKNBD1_D_MF'),
-    (N'dbo', N'ARS_SUKNFO_D_MF'),
-    (N'dbo', N'ARS_SUKNFX_D_MF'),
-    (N'dbo', N'ARS_SUKNIRS_D_MF'),
-    (N'dbo', N'ARS_SUKNMM_D_MF'),
-    (N'dbo', N'ARS_SUKSWP_D_MF'),
-    (N'dbo', N'BankBranch'),
-    (N'dbo', N'BankBranch_his'),
-    (N'dbo', N'BankBranch_temp'),
-    (N'dbo', N'BankGroup'),
-    (N'dbo', N'BankUnit'),
-    (N'dbo', N'BankYearNeWorthBase'),
-    (N'dbo', N'BankYearNeWorthBase_his'),
-    (N'dbo', N'BankYearNeWorthBase_temp'),
-    (N'dbo', N'BankYearNeWorthBase_Week'),
-    (N'dbo', N'CDS'),
-    (N'dbo', N'ContinentCountry'),
-    (N'dbo', N'ContinentCountry_his'),
-    (N'dbo', N'ContinentCountry_temp'),
-    (N'dbo', N'ContinentMaster'),
-    (N'dbo', N'ContinentMaster_his'),
-    (N'dbo', N'ContinentMaster_temp'),
-    (N'dbo', N'CountryException'),
-    (N'dbo', N'CountryException_his'),
-    (N'dbo', N'CountryException_temp'),
-    (N'dbo', N'CountryExceptionBankGroup'),
-    (N'dbo', N'CountryExceptionBankGroup_his'),
-    (N'dbo', N'CountryExceptionBankGroup_temp'),
-    (N'dbo', N'CountryFocus'),
-    (N'dbo', N'CountryFocus_his'),
-    (N'dbo', N'CountryFocus_temp'),
-    (N'dbo', N'CountryForexRateMapping'),
-    (N'dbo', N'CountryMaster'),
-    (N'dbo', N'CountryMaster_his'),
-    (N'dbo', N'CountryMaster_temp'),
-    (N'dbo', N'CountryOutlookReport'),
-    (N'dbo', N'CountryOutlookReport_his'),
-    (N'dbo', N'CountryOutlookReport_Source'),
-    (N'dbo', N'CountryOutlookReport_temp'),
-    (N'dbo', N'CountryOutlookReport_Views'),
-    (N'dbo', N'CountryWeightPercent'),
-    (N'dbo', N'CreditRating_AllBmi'),
-    (N'dbo', N'CreditRating_Bmi'),
-    (N'dbo', N'CreditRating_BmiRule'),
-    (N'dbo', N'CreditRating_CountApi'),
-    (N'dbo', N'CreditRating_CountBmi'),
-    (N'dbo', N'CreditRating_Country'),
-    (N'dbo', N'CreditRating_Country_Current'),
-    (N'dbo', N'CreditRating_Country_Log'),
-    (N'dbo', N'CreditRating_Country_Log_Detail'),
-    (N'dbo', N'CreditRating_Country_M'),
-    (N'dbo', N'CreditRating_CountryId'),
-    (N'dbo', N'CreditRating_ErrorCountry'),
-    (N'dbo', N'CreditRating_ErrorISIN'),
-    (N'dbo', N'CreditRating_ErrorLEI'),
-    (N'dbo', N'CreditRating_LEI'),
-    (N'dbo', N'CreditRating_ScoreMapping'),
-    (N'dbo', N'CreditRating_ScoreMapping_his'),
-    (N'dbo', N'CreditRating_ScoreMapping_temp'),
-    (N'dbo', N'CreditRating_Token'),
-    (N'dbo', N'CreditRatingMaster'),
-    (N'dbo', N'Customer'),
-    (N'dbo', N'Customer_his'),
-    (N'dbo', N'Customer_temp'),
-    (N'dbo', N'DAILY_CIF_TMP'),
-    (N'dbo', N'ExcelTemplate'),
-    (N'dbo', N'FeatureDetail'),
-    (N'dbo', N'FileCenter'),
-    (N'dbo', N'FileCenter_Downloads'),
-    (N'dbo', N'FinancialProductMaster'),
-    (N'dbo', N'FinancialProductMaster_his'),
-    (N'dbo', N'FinancialProductMaster_temp'),
-    (N'dbo', N'FinancialRiskFactorData'),
-    (N'dbo', N'FinancialRiskFactorData_his'),
-    (N'dbo', N'FinancialRiskFactorData_temp'),
-    (N'dbo', N'FinancialRiskFactorPeriodDay'),
-    (N'dbo', N'FinancialRiskFactorPeriodDay_his'),
-    (N'dbo', N'FinancialRiskFactorPeriodDay_temp'),
-    (N'dbo', N'FL_FLMST_D_MF'),
-    (N'dbo', N'Flow'),
-    (N'dbo', N'FlowDetail'),
-    (N'dbo', N'FlowFileMapping'),
-    (N'dbo', N'FlowForm'),
-    (N'dbo', N'FlowForm_LoanMain'),
-    (N'dbo', N'FlowModifyRecord'),
-    (N'dbo', N'FlowRecord'),
-    (N'dbo', N'FlowUserReset'),
-    (N'dbo', N'FM_FMLINE_D_MF'),
-    (N'dbo', N'ForexRate'),
-    (N'dbo', N'FPEXR_STG'),
-    (N'dbo', N'Global'),
-    (N'dbo', N'GroupIdCounter'),
-    (N'dbo', N'HRIS_Origin'),
-    (N'dbo', N'i18nText'),
-    (N'dbo', N'INDUSTRY'),
-    (N'dbo', N'INDUSTRY_Internal'),
-    (N'dbo', N'INDUSTRY_Overseas'),
-    (N'dbo', N'LoanApprovalEntry'),
-    (N'dbo', N'LoanBranchApproveAmountHis'),
-    (N'dbo', N'LoanBranchData'),
-    (N'dbo', N'LoanExtApp'),
-    (N'dbo', N'LoanMainUnitData'),
-    (N'dbo', N'LS_LSRSA_D_MF'),
-    (N'dbo', N'm_parameter'),
-    (N'dbo', N'Mail'),
-    (N'dbo', N'Mail_his'),
-    (N'dbo', N'Mail_temp'),
-    (N'dbo', N'MailCcMapping'),
-    (N'dbo', N'MailCcMapping_his'),
-    (N'dbo', N'MailCcMapping_temp'),
-    (N'dbo', N'MailCustomCcMapping'),
-    (N'dbo', N'MailCustomCcMapping_his'),
-    (N'dbo', N'MailCustomCcMapping_temp'),
-    (N'dbo', N'MailCustomToMapping'),
-    (N'dbo', N'MailCustomToMapping_his'),
-    (N'dbo', N'MailCustomToMapping_temp'),
-    (N'dbo', N'MailGroup'),
-    (N'dbo', N'MailGroupCcMapping'),
-    (N'dbo', N'MailGroupCcMapping_his'),
-    (N'dbo', N'MailGroupCcMapping_temp'),
-    (N'dbo', N'MailGroupMapping'),
-    (N'dbo', N'MailGroupMapping_his'),
-    (N'dbo', N'MailGroupMapping_temp'),
-    (N'dbo', N'MailGroupUser'),
-    (N'dbo', N'MailLog'),
-    (N'dbo', N'MailLog_CcCustomMapping'),
-    (N'dbo', N'MailLog_CcGroupMapping'),
-    (N'dbo', N'MailLog_CcMapping'),
-    (N'dbo', N'MailLog_CustomMapping'),
-    (N'dbo', N'MailLog_FileMapping'),
-    (N'dbo', N'MailLog_GroupMapping'),
-    (N'dbo', N'MailLog_Mapping'),
-    (N'dbo', N'MailToMapping'),
-    (N'dbo', N'MailToMapping_his'),
-    (N'dbo', N'MailToMapping_temp'),
-    (N'dbo', N'Menu'),
-    (N'dbo', N'MIS_CRCY_REF'),
-    (N'dbo', N'MONITORDATA'),
-    (N'dbo', N'MONITORDATA_his'),
-    (N'dbo', N'MONITORDATA_temp'),
-    (N'dbo', N'News'),
-    (N'dbo', N'News_his'),
-    (N'dbo', N'News_temp'),
-    (N'dbo', N'News_Views'),
-    (N'dbo', N'NewsCountryType'),
-    (N'dbo', N'NewsCountryType_his'),
-    (N'dbo', N'NewsCountryType_temp'),
-    (N'dbo', N'NewsFileMapping'),
-    (N'dbo', N'NewsFileMapping_his'),
-    (N'dbo', N'NewsFileMapping_temp'),
-    (N'dbo', N'Notice'),
-    (N'dbo', N'NoticeUser'),
-    (N'dbo', N'OldData_Quota'),
-    (N'dbo', N'OldData_QuotaWeight'),
-    (N'dbo', N'OldData_Rating'),
-    (N'dbo', N'OS_LNSLMSD_D_MF'),
-    (N'dbo', N'OS_LNSLNKD_D_MF'),
-    (N'dbo', N'OS_LNSMSTD_D_MF'),
-    (N'dbo', N'OS_LNSSECD_D_MF'),
-    (N'dbo', N'OSBDKF02_MF'),
-    (N'dbo', N'OSFXKF02_MF'),
-    (N'dbo', N'OSISKF02_MF'),
-    (N'dbo', N'OSMMKF02_MF'),
-    (N'dbo', N'Permissions'),
-    (N'dbo', N'Permissions_his'),
-    (N'dbo', N'Permissions_Query'),
-    (N'dbo', N'Permissions_Query_his'),
-    (N'dbo', N'Post'),
-    (N'dbo', N'Post_his'),
-    (N'dbo', N'Post_temp'),
-    (N'dbo', N'Post_Views'),
-    (N'dbo', N'PostCountryType'),
-    (N'dbo', N'PostCountryType_his'),
-    (N'dbo', N'PostCountryType_temp'),
-    (N'dbo', N'PostFileMapping'),
-    (N'dbo', N'PostFileMapping_his'),
-    (N'dbo', N'PostFileMapping_temp'),
-    (N'dbo', N'ProductMaster'),
-    (N'dbo', N'QuickLink'),
-    (N'dbo', N'QuotaBank_D'),
-    (N'dbo', N'QuotaBank_D_Form_AllData'),
-    (N'dbo', N'QuotaBank_D_his'),
-    (N'dbo', N'QuotaBank_D_temp'),
-    (N'dbo', N'QuotaBank_D_Week'),
-    (N'dbo', N'QuotaBank_Form_Data'),
-    (N'dbo', N'QuotaBank_Form_ParentWeight'),
-    (N'dbo', N'QuotaBank_M'),
-    (N'dbo', N'QuotaBank_M_Form_AllData'),
-    (N'dbo', N'QuotaBank_M_his'),
-    (N'dbo', N'QuotaBank_M_temp'),
-    (N'dbo', N'QuotaBank_M_Week'),
-    (N'dbo', N'QuotaBank_Weight'),
-    (N'dbo', N'QuotaBank_Weight_Form_AllData'),
-    (N'dbo', N'QuotaBank_Weight_his'),
-    (N'dbo', N'QuotaBank_Weight_temp'),
-    (N'dbo', N'QuotaBank_Weight_Week'),
-    (N'dbo', N'RatingRatioMaster'),
-    (N'dbo', N'RatingRatioMaster_his'),
-    (N'dbo', N'RatingRatioMaster_temp'),
-    (N'dbo', N'RatingRatioMaster_Week'),
-    (N'dbo', N'RatingRatioMasterBase'),
-    (N'dbo', N'RiskLineD'),
-    (N'dbo', N'RiskLineO'),
-    (N'dbo', N'Role'),
-    (N'dbo', N'Role_his'),
-    (N'dbo', N'Role_Position_Mapping'),
-    (N'dbo', N'Role_Position_Mapping_his'),
-    (N'dbo', N'Role_User_Mapping'),
-    (N'dbo', N'Role_User_Mapping_his'),
-    (N'dbo', N'RPA'),
-    (N'dbo', N'RPA_his'),
-    (N'dbo', N'RPA_Source'),
-    (N'dbo', N'RPA_temp'),
-    (N'dbo', N'RPA_Views'),
-    (N'dbo', N'RPACountryType'),
-    (N'dbo', N'RPACountryType_his'),
-    (N'dbo', N'RPACountryType_temp'),
-    (N'dbo', N'RPAFileMapping'),
-    (N'dbo', N'RPAFileMapping_his'),
-    (N'dbo', N'RPAFileMapping_temp'),
-    (N'dbo', N'ScheduleJobs'),
-    (N'dbo', N'ScheduleJobs_his'),
-    (N'dbo', N'ScheduleJobs_RECORD'),
-    (N'dbo', N'ScheduleJobs_temp'),
-    (N'dbo', N'SysData'),
-    (N'dbo', N'SysLog'),
-    (N'dbo', N'TempModifyRecord'),
-    (N'dbo', N'Title'),
-    (N'dbo', N'TitleMapping'),
-    (N'dbo', N'Users'),
-    (N'dbo', N'Users_log'),
-    (N'dbo', N'UserTextLibrary'),
-    (N'dbo', N'UserToken');
+IF N'$(ConfirmDestructiveRebuild)' <> N'1'
+    THROW 51001, 'Set ConfirmDestructiveRebuild=1 only after confirming the target database can be destructively rebuilt.', 1;
 GO
-IF N'$(AllowDataLoss)' <> N'1' AND EXISTS (
-    SELECT 1 FROM #ExpectedEfTables AS expected
-    INNER JOIN sys.schemas AS schemas ON schemas.name = expected.SchemaName
-    INNER JOIN sys.tables AS tables ON tables.schema_id = schemas.schema_id AND tables.name = expected.TableName
-    INNER JOIN sys.dm_db_partition_stats AS partitions ON partitions.object_id = tables.object_id AND partitions.index_id IN (0, 1)
-    GROUP BY tables.object_id HAVING SUM(partitions.row_count) > 0
-) THROW 51001, 'Selected EF tables contain data. Review the target or set AllowDataLoss=1 explicitly.', 1;
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    THROW 51002, 'Required table filegroup NCRMS_TAB does not exist in the target database.', 1;
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    THROW 51003, 'Required index filegroup NCRMS_IDX does not exist in the target database.', 1;
 GO
-IF EXISTS (
-    SELECT 1 FROM sys.foreign_keys AS foreignKeys
-    INNER JOIN sys.tables AS referencedTable ON referencedTable.object_id = foreignKeys.referenced_object_id
-    INNER JOIN sys.schemas AS referencedSchema ON referencedSchema.schema_id = referencedTable.schema_id
-    INNER JOIN #ExpectedEfTables AS expected ON expected.SchemaName = referencedSchema.name AND expected.TableName = referencedTable.name
-    INNER JOIN sys.tables AS parentTable ON parentTable.object_id = foreignKeys.parent_object_id
-    INNER JOIN sys.schemas AS parentSchema ON parentSchema.schema_id = parentTable.schema_id
-    LEFT JOIN #ExpectedEfTables AS selectedParent ON selectedParent.SchemaName = parentSchema.name AND selectedParent.TableName = parentTable.name
-    WHERE selectedParent.TableName IS NULL
-) THROW 51002, 'A DB-only table references an EF-managed table. Resolve that dependency before deployment.', 1;
-GO
+
+-- Deployment-driver permission model:
+--   * Requires DDL rights for the target database objects.
+--   * Does not INSERT, UPDATE, DELETE, or SELECT rows from application tables.
+--   * DML text inside procedure/trigger definitions is compiled only and is not executed here.
+-- Preconditions:
+--   * The target database contains no data that must be retained.
+--   * No target-only foreign key may reference an EF-managed table; such a dependency fails safely at DROP TABLE.
 BEGIN TRANSACTION;
 GO
-DECLARE @dropForeignKeys nvarchar(max) = N'';
-SELECT @dropForeignKeys = STRING_AGG(CAST(N'ALTER TABLE ' + QUOTENAME(parentSchema.name) + N'.' + QUOTENAME(parentTable.name) + N' DROP CONSTRAINT ' + QUOTENAME(foreignKeys.name) + N';' AS nvarchar(max)), CHAR(13) + CHAR(10))
-FROM sys.foreign_keys AS foreignKeys INNER JOIN sys.tables AS parentTable ON parentTable.object_id = foreignKeys.parent_object_id INNER JOIN sys.schemas AS parentSchema ON parentSchema.schema_id = parentTable.schema_id INNER JOIN #ExpectedEfTables AS expected ON expected.SchemaName = parentSchema.name AND expected.TableName = parentTable.name;
-IF NULLIF(@dropForeignKeys, N'') IS NOT NULL EXEC sys.sp_executesql @dropForeignKeys;
+
+-- Drop the DB-sourced foreign keys explicitly so no temp-table DML or DMV permission is required.
+IF OBJECT_ID(N'[dbo].[FK_BankBranch_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[BankBranch_his] DROP CONSTRAINT [FK_BankBranch_his_FlowForm];
 GO
+IF OBJECT_ID(N'[dbo].[FK_BankBranch_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[BankBranch_temp] DROP CONSTRAINT [FK_BankBranch_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_BankYearNeWorthBase_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[BankYearNeWorthBase_his] DROP CONSTRAINT [FK_BankYearNeWorthBase_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_BankYearNeWorthBase_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[BankYearNeWorthBase_temp] DROP CONSTRAINT [FK_BankYearNeWorthBase_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ContinentCountry_ContinentMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[ContinentCountry] DROP CONSTRAINT [FK_ContinentCountry_ContinentMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ContinentCountry_CountryMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[ContinentCountry] DROP CONSTRAINT [FK_ContinentCountry_CountryMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ContinentCountry_temp_ContinentMaster_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[ContinentCountry_temp] DROP CONSTRAINT [FK_ContinentCountry_temp_ContinentMaster_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ContinentMaster_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[ContinentMaster_his] DROP CONSTRAINT [FK_ContinentMaster_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ContinentMaster_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[ContinentMaster_temp] DROP CONSTRAINT [FK_ContinentMaster_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CountryException_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CountryException_temp] DROP CONSTRAINT [FK_CountryException_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CountryExceptionBankGroup_CountryException]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CountryExceptionBankGroup] DROP CONSTRAINT [FK_CountryExceptionBankGroup_CountryException];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CountryExceptionBankGroup_temp_CountryException_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CountryExceptionBankGroup_temp] DROP CONSTRAINT [FK_CountryExceptionBankGroup_temp_CountryException_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CountryFocus_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CountryFocus_temp] DROP CONSTRAINT [FK_CountryFocus_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CountryMaster_ContinentMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CountryMaster] DROP CONSTRAINT [FK_CountryMaster_ContinentMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CountryMaster_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CountryMaster_temp] DROP CONSTRAINT [FK_CountryMaster_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CountryOutlookReport_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CountryOutlookReport_his] DROP CONSTRAINT [FK_CountryOutlookReport_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CountryOutlookReport_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CountryOutlookReport_temp] DROP CONSTRAINT [FK_CountryOutlookReport_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CountryOutlookReport_Views_CountryOutlookReport]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CountryOutlookReport_Views] DROP CONSTRAINT [FK_CountryOutlookReport_Views_CountryOutlookReport];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CountryWeightPercent_ContinentMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CountryWeightPercent] DROP CONSTRAINT [FK_CountryWeightPercent_ContinentMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_CountApi_Global]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_CountApi] DROP CONSTRAINT [FK_CreditRating_CountApi_Global];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_CountApi_RatingAgency]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_CountApi] DROP CONSTRAINT [FK_CreditRating_CountApi_RatingAgency];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_Country_Current_CountryMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_Country_Current] DROP CONSTRAINT [FK_CreditRating_Country_Current_CountryMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_Country_Current_CreditRatingMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_Country_Current] DROP CONSTRAINT [FK_CreditRating_Country_Current_CreditRatingMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_Country_Log_CountryMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_Country_Log] DROP CONSTRAINT [FK_CreditRating_Country_Log_CountryMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_Country_Log_Detail_CountryMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_Country_Log_Detail] DROP CONSTRAINT [FK_CreditRating_Country_Log_Detail_CountryMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_Country_Log_Detail_CreditRatingMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_Country_Log_Detail] DROP CONSTRAINT [FK_CreditRating_Country_Log_Detail_CreditRatingMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_ErrorCountry_Country]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_ErrorCountry] DROP CONSTRAINT [FK_CreditRating_ErrorCountry_Country];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_ErrorCountry_Global]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_ErrorCountry] DROP CONSTRAINT [FK_CreditRating_ErrorCountry_Global];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_ErrorCountry_RatingAgency]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_ErrorCountry] DROP CONSTRAINT [FK_CreditRating_ErrorCountry_RatingAgency];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_ErrorISIN_Global]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_ErrorISIN] DROP CONSTRAINT [FK_CreditRating_ErrorISIN_Global];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_ErrorISIN_RatingAgency]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_ErrorISIN] DROP CONSTRAINT [FK_CreditRating_ErrorISIN_RatingAgency];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_ErrorLEI_Global]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_ErrorLEI] DROP CONSTRAINT [FK_CreditRating_ErrorLEI_Global];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_ErrorLEI_RatingAgency]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_ErrorLEI] DROP CONSTRAINT [FK_CreditRating_ErrorLEI_RatingAgency];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CreditRating_ScoreMapping_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[CreditRating_ScoreMapping_his] DROP CONSTRAINT [FK_CreditRating_ScoreMapping_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Customer_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Customer_his] DROP CONSTRAINT [FK_Customer_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Customer_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Customer_temp] DROP CONSTRAINT [FK_Customer_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FeatureDetail_Menu]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FeatureDetail] DROP CONSTRAINT [FK_FeatureDetail_Menu];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FileCenter_Downloads_FileCenter]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FileCenter_Downloads] DROP CONSTRAINT [FK_FileCenter_Downloads_FileCenter];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FinancialProductMaster_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FinancialProductMaster_his] DROP CONSTRAINT [FK_FinancialProductMaster_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FinancialProductMaster_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FinancialProductMaster_temp] DROP CONSTRAINT [FK_FinancialProductMaster_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FinancialRiskFactorData_PeriodID_FinancialRiskFactorPeriodDay_PKID]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FinancialRiskFactorData] DROP CONSTRAINT [FK_FinancialRiskFactorData_PeriodID_FinancialRiskFactorPeriodDay_PKID];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FinancialRiskFactorData_ProductID_FinancialProductMaster_PKID]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FinancialRiskFactorData] DROP CONSTRAINT [FK_FinancialRiskFactorData_ProductID_FinancialProductMaster_PKID];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Flow_Menu]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Flow] DROP CONSTRAINT [FK_Flow_Menu];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FlowDetail_Flow]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FlowDetail] DROP CONSTRAINT [FK_FlowDetail_Flow];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FlowFileMapping_FileCenter]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FlowFileMapping] DROP CONSTRAINT [FK_FlowFileMapping_FileCenter];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FlowFileMapping_FlowRecord]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FlowFileMapping] DROP CONSTRAINT [FK_FlowFileMapping_FlowRecord];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FlowForm_Flow]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FlowForm] DROP CONSTRAINT [FK_FlowForm_Flow];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FlowModifyRecord_FlowDetail]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FlowModifyRecord] DROP CONSTRAINT [FK_FlowModifyRecord_FlowDetail];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FlowModifyRecord_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FlowModifyRecord] DROP CONSTRAINT [FK_FlowModifyRecord_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FlowRecord_FlowDetail]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FlowRecord] DROP CONSTRAINT [FK_FlowRecord_FlowDetail];
+GO
+IF OBJECT_ID(N'[dbo].[FK_FlowRecord_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[FlowRecord] DROP CONSTRAINT [FK_FlowRecord_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_LoanApprovalEntry_BranchData]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[LoanApprovalEntry] DROP CONSTRAINT [FK_LoanApprovalEntry_BranchData];
+GO
+IF OBJECT_ID(N'[dbo].[FK_LoanBranchApproveAmountHis_BranchData]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[LoanBranchApproveAmountHis] DROP CONSTRAINT [FK_LoanBranchApproveAmountHis_BranchData];
+GO
+IF OBJECT_ID(N'[dbo].[FK_LoanBranchData_LoanMain]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[LoanBranchData] DROP CONSTRAINT [FK_LoanBranchData_LoanMain];
+GO
+IF OBJECT_ID(N'[dbo].[FK_LoanExtApp_LoanMain]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[LoanExtApp] DROP CONSTRAINT [FK_LoanExtApp_LoanMain];
+GO
+IF OBJECT_ID(N'[dbo].[FK_LoanMainUnitData_LoanMain]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[LoanMainUnitData] DROP CONSTRAINT [FK_LoanMainUnitData_LoanMain];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Mail_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Mail_temp] DROP CONSTRAINT [FK_Mail_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailCcMapping_FKMailId_Mail_Id]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailCcMapping] DROP CONSTRAINT [FK_MailCcMapping_FKMailId_Mail_Id];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailCcMapping_UserId_Users_UserId]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailCcMapping] DROP CONSTRAINT [FK_MailCcMapping_UserId_Users_UserId];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailCcMapping_temp_Mail_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailCcMapping_temp] DROP CONSTRAINT [FK_MailCcMapping_temp_Mail_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailCustomCcMapping_FKMailId_Mail_Id]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailCustomCcMapping] DROP CONSTRAINT [FK_MailCustomCcMapping_FKMailId_Mail_Id];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailCustomCcMapping_temp_Mail_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailCustomCcMapping_temp] DROP CONSTRAINT [FK_MailCustomCcMapping_temp_Mail_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailCustomToMapping_FKMailId_Mail_Id]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailCustomToMapping] DROP CONSTRAINT [FK_MailCustomToMapping_FKMailId_Mail_Id];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailCustomToMapping_temp_Mail_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailCustomToMapping_temp] DROP CONSTRAINT [FK_MailCustomToMapping_temp_Mail_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailGroupCcMapping_FKMailId_Mail_Id]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailGroupCcMapping] DROP CONSTRAINT [FK_MailGroupCcMapping_FKMailId_Mail_Id];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailGroupCcMapping_MailGroupId_Group_Id]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailGroupCcMapping] DROP CONSTRAINT [FK_MailGroupCcMapping_MailGroupId_Group_Id];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailGroupCcMapping_temp_Mail_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailGroupCcMapping_temp] DROP CONSTRAINT [FK_MailGroupCcMapping_temp_Mail_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailGroupMapping_FKMailId_Mail_Id]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailGroupMapping] DROP CONSTRAINT [FK_MailGroupMapping_FKMailId_Mail_Id];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailGroupMapping_MailGroupId_Group_Id]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailGroupMapping] DROP CONSTRAINT [FK_MailGroupMapping_MailGroupId_Group_Id];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailGroupMapping_temp_Mail_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailGroupMapping_temp] DROP CONSTRAINT [FK_MailGroupMapping_temp_Mail_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailGroupUser_MailGroupId_Group_Id]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailGroupUser] DROP CONSTRAINT [FK_MailGroupUser_MailGroupId_Group_Id];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailGroupUser_UserId_Users_UserId]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailGroupUser] DROP CONSTRAINT [FK_MailGroupUser_UserId_Users_UserId];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailLog_CcCustomMapping_MailLog]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailLog_CcCustomMapping] DROP CONSTRAINT [FK_MailLog_CcCustomMapping_MailLog];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Mail_CcGroupMapping_MailGroup]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailLog_CcGroupMapping] DROP CONSTRAINT [FK_Mail_CcGroupMapping_MailGroup];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Mail_CcGroupMapping_MailLog]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailLog_CcGroupMapping] DROP CONSTRAINT [FK_Mail_CcGroupMapping_MailLog];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailLog_CcMapping_MailLog]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailLog_CcMapping] DROP CONSTRAINT [FK_MailLog_CcMapping_MailLog];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailLog_CcMapping_Users]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailLog_CcMapping] DROP CONSTRAINT [FK_MailLog_CcMapping_Users];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailLog_CustomMapping_MailLog]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailLog_CustomMapping] DROP CONSTRAINT [FK_MailLog_CustomMapping_MailLog];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailLog_FileMapping_MailLog]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailLog_FileMapping] DROP CONSTRAINT [FK_MailLog_FileMapping_MailLog];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailLog_GroupMapping_MailLog]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailLog_GroupMapping] DROP CONSTRAINT [FK_MailLog_GroupMapping_MailLog];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailLog_Mapping_MailLog]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailLog_Mapping] DROP CONSTRAINT [FK_MailLog_Mapping_MailLog];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailLog_Mapping_Users]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailLog_Mapping] DROP CONSTRAINT [FK_MailLog_Mapping_Users];
+GO
+IF OBJECT_ID(N'[dbo].[Fk_MailToMapping_FKMailId_Mail_Id]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailToMapping] DROP CONSTRAINT [Fk_MailToMapping_FKMailId_Mail_Id];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailToMapping_UserId_Users_UserId]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailToMapping] DROP CONSTRAINT [FK_MailToMapping_UserId_Users_UserId];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MailToMapping_temp_Mail_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MailToMapping_temp] DROP CONSTRAINT [FK_MailToMapping_temp_Mail_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MONITORDATA_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MONITORDATA_his] DROP CONSTRAINT [FK_MONITORDATA_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_MONITORDATA_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[MONITORDATA_temp] DROP CONSTRAINT [FK_MONITORDATA_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_News_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[News_his] DROP CONSTRAINT [FK_News_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_News_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[News_temp] DROP CONSTRAINT [FK_News_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_News_Views_News]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[News_Views] DROP CONSTRAINT [FK_News_Views_News];
+GO
+IF OBJECT_ID(N'[dbo].[FK_NewsCountryType_CountryMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[NewsCountryType] DROP CONSTRAINT [FK_NewsCountryType_CountryMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_NewsCountryType_News]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[NewsCountryType] DROP CONSTRAINT [FK_NewsCountryType_News];
+GO
+IF OBJECT_ID(N'[dbo].[FK_NewsFileMapping_News]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[NewsFileMapping] DROP CONSTRAINT [FK_NewsFileMapping_News];
+GO
+IF OBJECT_ID(N'[dbo].[FK_NoticeUser_NoticeUser]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[NoticeUser] DROP CONSTRAINT [FK_NoticeUser_NoticeUser];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Permissions_FeatureDetail]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Permissions] DROP CONSTRAINT [FK_Permissions_FeatureDetail];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Permissions_Role]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Permissions] DROP CONSTRAINT [FK_Permissions_Role];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Permissions_his_Role_his]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Permissions_his] DROP CONSTRAINT [FK_Permissions_his_Role_his];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Permissions_Query_Role]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Permissions_Query] DROP CONSTRAINT [FK_Permissions_Query_Role];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Permissions_Query_his_Role_his]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Permissions_Query_his] DROP CONSTRAINT [FK_Permissions_Query_his_Role_his];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Post_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Post_his] DROP CONSTRAINT [FK_Post_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Post_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Post_temp] DROP CONSTRAINT [FK_Post_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Post_Views_Post]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Post_Views] DROP CONSTRAINT [FK_Post_Views_Post];
+GO
+IF OBJECT_ID(N'[dbo].[FK_PostCountryType_CountryMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[PostCountryType] DROP CONSTRAINT [FK_PostCountryType_CountryMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_PostCountryType_Post]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[PostCountryType] DROP CONSTRAINT [FK_PostCountryType_Post];
+GO
+IF OBJECT_ID(N'[dbo].[FK_PostFileMapping_Post]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[PostFileMapping] DROP CONSTRAINT [FK_PostFileMapping_Post];
+GO
+IF OBJECT_ID(N'[dbo].[FK_QuickLink_QuickLink]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[QuickLink] DROP CONSTRAINT [FK_QuickLink_QuickLink];
+GO
+IF OBJECT_ID(N'[dbo].[FK_QuotaBank_D_Form_AllData_QuotaBank_M_Form_AllData]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[QuotaBank_D_Form_AllData] DROP CONSTRAINT [FK_QuotaBank_D_Form_AllData_QuotaBank_M_Form_AllData];
+GO
+IF OBJECT_ID(N'[dbo].[FK_QuotaBank_D_his_QuotaBank_M_his]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[QuotaBank_D_his] DROP CONSTRAINT [FK_QuotaBank_D_his_QuotaBank_M_his];
+GO
+IF OBJECT_ID(N'[dbo].[FK_QuotaBank_D_temp_QuotaBank_M_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[QuotaBank_D_temp] DROP CONSTRAINT [FK_QuotaBank_D_temp_QuotaBank_M_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_QuotaBank_Form_Data_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[QuotaBank_Form_Data] DROP CONSTRAINT [FK_QuotaBank_Form_Data_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_QuotaBank_M_Form_AllData_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[QuotaBank_M_Form_AllData] DROP CONSTRAINT [FK_QuotaBank_M_Form_AllData_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_QuotaBank_M_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[QuotaBank_M_his] DROP CONSTRAINT [FK_QuotaBank_M_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_QuotaBank_Weight_Form_AllData_QuotaBank_D_Form_AllData]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[QuotaBank_Weight_Form_AllData] DROP CONSTRAINT [FK_QuotaBank_Weight_Form_AllData_QuotaBank_D_Form_AllData];
+GO
+IF OBJECT_ID(N'[dbo].[FK_QuotaBank_Weight_his_QuotaBank_D_his]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[QuotaBank_Weight_his] DROP CONSTRAINT [FK_QuotaBank_Weight_his_QuotaBank_D_his];
+GO
+IF OBJECT_ID(N'[dbo].[FK_QuotaBank_Weight_temp_QuotaBank_D_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[QuotaBank_Weight_temp] DROP CONSTRAINT [FK_QuotaBank_Weight_temp_QuotaBank_D_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_RatingRatioMaster_temp_BankYearNeWorthBase_temp]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[RatingRatioMaster_temp] DROP CONSTRAINT [FK_RatingRatioMaster_temp_BankYearNeWorthBase_temp];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Role_Position_Mapping_Role]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Role_Position_Mapping] DROP CONSTRAINT [FK_Role_Position_Mapping_Role];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Role_Position_Mapping_his_Role_his]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Role_Position_Mapping_his] DROP CONSTRAINT [FK_Role_Position_Mapping_his_Role_his];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Role_User_Mapping_Role]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Role_User_Mapping] DROP CONSTRAINT [FK_Role_User_Mapping_Role];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Role_User_Mapping_Users]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Role_User_Mapping] DROP CONSTRAINT [FK_Role_User_Mapping_Users];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Role_User_Mapping_his_Role_his]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Role_User_Mapping_his] DROP CONSTRAINT [FK_Role_User_Mapping_his_Role_his];
+GO
+IF OBJECT_ID(N'[dbo].[FK_NewsPost_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[RPA_temp] DROP CONSTRAINT [FK_NewsPost_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_RPA_Views_RPA]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[RPA_Views] DROP CONSTRAINT [FK_RPA_Views_RPA];
+GO
+IF OBJECT_ID(N'[dbo].[FK_RPACountryType_CountryMaster]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[RPACountryType] DROP CONSTRAINT [FK_RPACountryType_CountryMaster];
+GO
+IF OBJECT_ID(N'[dbo].[FK_RPACountryType_RPA]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[RPACountryType] DROP CONSTRAINT [FK_RPACountryType_RPA];
+GO
+IF OBJECT_ID(N'[dbo].[FK_RPAFileMapping_RPA]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[RPAFileMapping] DROP CONSTRAINT [FK_RPAFileMapping_RPA];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ScheduleJobs_his_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[ScheduleJobs_his] DROP CONSTRAINT [FK_ScheduleJobs_his_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ScheduleJobs_temp_FlowForm]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[ScheduleJobs_temp] DROP CONSTRAINT [FK_ScheduleJobs_temp_FlowForm];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Users_Users]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Users] DROP CONSTRAINT [FK_Users_Users];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Users_Users1]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[Users] DROP CONSTRAINT [FK_Users_Users1];
+GO
+IF OBJECT_ID(N'[dbo].[FK_UserTextLibrary_Users]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[UserTextLibrary] DROP CONSTRAINT [FK_UserTextLibrary_Users];
+GO
+IF OBJECT_ID(N'[dbo].[FK_Users_UserId]', N'F') IS NOT NULL
+    ALTER TABLE [dbo].[UserToken] DROP CONSTRAINT [FK_Users_UserId];
+GO
+
 DROP PROCEDURE IF EXISTS [dbo].[usp_UpdateMonitorDataUnit];
 GO
 DROP PROCEDURE IF EXISTS [dbo].[usp_UpdateMonitorDataPruduct07RiskFactor];
@@ -866,12 +1021,12 @@ CREATE TABLE [dbo].[ACNOD_STG](
 	[ACNOD_LAST_BAL_MARK] [nvarchar](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[ACNOD_EXT_DATE] [date] NULL,
 	[Create_Date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_ACNOD_STG] ON [dbo].[ACNOD_STG]
 (
 	[ACNOD_EXT_DATE] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[ACNOD_STG] ADD  CONSTRAINT [DF_ACNOD_STG_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO
@@ -904,7 +1059,7 @@ CREATE TABLE [dbo].[ACOLRT_STG](
 	[ACOLRT_EXT_DATE] [date] NULL,
 	[ACOLRT_LOAD_DATE] [datetime] NULL,
 	[Create_Date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ACOLRT_STG] ADD  CONSTRAINT [DF_ACOLRT_STG_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO
@@ -929,7 +1084,7 @@ CREATE TABLE [dbo].[ARS_SUKBDO_D_MF](
 	[SUKBDO_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKBDO_D_MF] ADD  CONSTRAINT [DF_ARS_SUKBDO_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -980,7 +1135,7 @@ CREATE TABLE [dbo].[ARS_SUKFRA_D_MF](
 	[SUKFRA_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKFRA_D_MF] ADD  CONSTRAINT [DF_ARS_SUKFRA_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1035,7 +1190,7 @@ CREATE TABLE [dbo].[ARS_SUKIRO_D_MF](
 	[SUKIRO_RISK_AMT] [decimal](17, 2) NULL,
 	[SUKIRO_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKIRO_D_MF] ADD  CONSTRAINT [DF_ARS_SUKIRO_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1090,7 +1245,7 @@ CREATE TABLE [dbo].[ARS_SUKMST_D_MF](
 	[SUKMST_DEPOSIT_LINK] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKMST_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKMST_D_MF] ADD  CONSTRAINT [DF_ARS_SUKMST_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1149,7 +1304,7 @@ CREATE TABLE [dbo].[ARS_SUKNBD1_D_MF](
 	[SUKBD1_EXT_DATE] [date] NULL,
 	[SUKBD1_GU_LOG_CTY] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKNBD1_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNBD1_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1178,7 +1333,7 @@ CREATE TABLE [dbo].[ARS_SUKNFO_D_MF](
 	[SUKFO_CPTY_COUNTRY_RISK] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKFO_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKNFO_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNFO_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1205,7 +1360,7 @@ CREATE TABLE [dbo].[ARS_SUKNFX_D_MF](
 	[SUKFX_CUR_SOLD] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKFX_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKNFX_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNFX_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1231,7 +1386,7 @@ CREATE TABLE [dbo].[ARS_SUKNIRS_D_MF](
 	[SUKIRS_DEPOSIT_LINK] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKIRS_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKNIRS_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNIRS_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1256,7 +1411,7 @@ CREATE TABLE [dbo].[ARS_SUKNMM_D_MF](
 	[SUKMM_CPTY_TYPE] [nvarchar](6) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKMM_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKNMM_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNMM_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1281,7 +1436,7 @@ CREATE TABLE [dbo].[ARS_SUKSWP_D_MF](
 	[SUKSWP_RISK_AMT] [decimal](17, 2) NULL,
 	[SUKSWP_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKSWP_D_MF] ADD  CONSTRAINT [DF_ARS_SUKSWP_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1312,12 +1467,12 @@ CREATE TABLE [dbo].[BankBranch](
  CONSTRAINT [PK_BankBranch] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [UQ__BankBran__93AE04F7B8522DBF] UNIQUE NONCLUSTERED
 (
 	[BankCode] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[BankBranch] ADD  CONSTRAINT [DF_BankBranch_BankCode]  DEFAULT ('') FOR [BankCode]
 GO
@@ -1402,8 +1557,8 @@ CREATE TABLE [dbo].[BankBranch_his](
  CONSTRAINT [PK_BankBranch_his] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[BankBranch_his] ADD  CONSTRAINT [DF_BankBranch_his_BankCode]  DEFAULT ('') FOR [BankCode]
 GO
@@ -1490,8 +1645,8 @@ CREATE TABLE [dbo].[BankBranch_temp](
  CONSTRAINT [PK__BankBran__06C703C149E1DA90] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[BankBranch_temp] ADD  CONSTRAINT [DF__BankBranc__BankC__0134F289]  DEFAULT ('') FOR [BankCode]
 GO
@@ -1546,16 +1701,16 @@ CREATE TABLE [dbo].[BankGroup](
  CONSTRAINT [PK_BankGroup] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [IX_BankGroup] UNIQUE NONCLUSTERED
 (
 	[GroupCode] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX],
  CONSTRAINT [UQ__BankGrou__3B97438087DD735B] UNIQUE NONCLUSTERED
 (
 	[GroupCode] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[BankGroup] ADD  CONSTRAINT [DF_BankGroup_GroupCode]  DEFAULT ('') FOR [GroupCode]
 GO
@@ -1631,12 +1786,12 @@ CREATE TABLE [dbo].[BankUnit](
  CONSTRAINT [PK_BankUnit] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [UQ__BankUnit__0665E6D9CD3FA132] UNIQUE NONCLUSTERED
 (
 	[UnitCode] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[BankUnit] ADD  CONSTRAINT [DF_BankUnit_FK_BankGroup]  DEFAULT ('') FOR [FK_BankGroup]
 GO
@@ -1721,12 +1876,12 @@ CREATE TABLE [dbo].[BankYearNeWorthBase](
  CONSTRAINT [PK__BankYear__F4A24B22679E0D0C] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [UQ__BankYear__D4BD60544D11DEBB] UNIQUE NONCLUSTERED
 (
 	[Year] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[BankYearNeWorthBase] ADD  CONSTRAINT [DF_BankYearNeWorthBase_Year]  DEFAULT (datepart(year,getdate())) FOR [Year]
 GO
@@ -1794,8 +1949,8 @@ CREATE TABLE [dbo].[BankYearNeWorthBase_his](
  CONSTRAINT [PK__BankYear__2D21E3B6DFB7F344] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[BankYearNeWorthBase_his] ADD  CONSTRAINT [DF__BankYearNe__Year__2B754518]  DEFAULT (datepart(year,getdate())) FOR [Year]
 GO
@@ -1849,8 +2004,8 @@ CREATE TABLE [dbo].[BankYearNeWorthBase_temp](
  CONSTRAINT [PK__BankYear__06C703C135832B7A] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[BankYearNeWorthBase_temp] ADD  CONSTRAINT [DF__BankYearNe__Year__21EBDADE]  DEFAULT (datepart(year,getdate())) FOR [Year]
 GO
@@ -1896,15 +2051,15 @@ CREATE TABLE [dbo].[BankYearNeWorthBase_Week](
  CONSTRAINT [PK_BankYearNeWorthBase_Week] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_BankYearNeWorthBase_Week] ON [dbo].[BankYearNeWorthBase_Week]
 (
 	[Year] ASC,
 	[Month] ASC,
 	[Week] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[BankYearNeWorthBase_Week] ADD  CONSTRAINT [DF_BankYearNeWorthBase_Week_Year]  DEFAULT (datepart(year,getdate())) FOR [Year]
 GO
@@ -1959,8 +2114,8 @@ CREATE TABLE [dbo].[CDS](
 	[CountryCode2] ASC,
 	[CDS_date] ASC,
 	[CountryName] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -1975,14 +2130,14 @@ CREATE TABLE [dbo].[ContinentCountry](
  CONSTRAINT [PK_ContinentCountry] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_ContinentCountry] ON [dbo].[ContinentCountry]
 (
 	[ContinentId] ASC,
 	[CountryId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[ContinentCountry] ADD  CONSTRAINT [DF_CONTINENTCOUNTRY_CONTINENTCODE]  DEFAULT ('') FOR [ContinentId]
 GO
@@ -2018,8 +2173,8 @@ CREATE TABLE [dbo].[ContinentCountry_his](
  CONSTRAINT [PK__Continen__2D21E3B6751AFBD0] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ContinentCountry_his] ADD  CONSTRAINT [DF__Continent__SysCr__19C0A931]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -2049,8 +2204,8 @@ CREATE TABLE [dbo].[ContinentCountry_temp](
  CONSTRAINT [PK__Continen__06C703C1E58220A3] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ContinentCountry_temp] ADD  CONSTRAINT [DF__Continent__Conti__1C9D15DC]  DEFAULT ('') FOR [ContinentId]
 GO
@@ -2093,8 +2248,8 @@ CREATE TABLE [dbo].[ContinentMaster](
  CONSTRAINT [PK_ContinentMaster] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ContinentMaster] ADD  CONSTRAINT [DF_ContinentMaster_ContinentCode]  DEFAULT ('') FOR [ContinentCode]
 GO
@@ -2170,8 +2325,8 @@ CREATE TABLE [dbo].[ContinentMaster_his](
  CONSTRAINT [PK__Continen__2D21E3B63171B2E4] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ContinentMaster_his] ADD  CONSTRAINT [DF__Continent__Conti__0A7E65A1]  DEFAULT ('') FOR [ContinentCode]
 GO
@@ -2235,8 +2390,8 @@ CREATE TABLE [dbo].[ContinentMaster_temp](
  CONSTRAINT [PK__Continen__06C703C1D3342835] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ContinentMaster_temp] ADD  CONSTRAINT [DF__Continent__Conti__7B3C2211]  DEFAULT ('') FOR [ContinentCode]
 GO
@@ -2285,8 +2440,8 @@ CREATE TABLE [dbo].[CountryException](
  CONSTRAINT [PK_CountryException] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryException] ADD  CONSTRAINT [DF_CountryException_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -2319,8 +2474,8 @@ CREATE TABLE [dbo].[CountryException_his](
  CONSTRAINT [PK_CountryException_his] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryException_his] ADD  CONSTRAINT [DF_CountryException_his_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -2346,8 +2501,8 @@ CREATE TABLE [dbo].[CountryException_temp](
  CONSTRAINT [PK_CountryException_temp] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryException_temp] ADD  CONSTRAINT [DF_CountryException_temp_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -2365,8 +2520,8 @@ CREATE TABLE [dbo].[CountryExceptionBankGroup](
  CONSTRAINT [PK_CountryExceptionBankGroup] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'授信業務' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'CountryExceptionBankGroup', @level2type=N'COLUMN',@level2name=N'CreditBusiness'
 GO
@@ -2393,8 +2548,8 @@ CREATE TABLE [dbo].[CountryExceptionBankGroup_his](
  CONSTRAINT [PK_CountryExceptionBankGroup_his] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryExceptionBankGroup_his] ADD  CONSTRAINT [DF_CountryExceptionBankGroup_his_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -2423,8 +2578,8 @@ CREATE TABLE [dbo].[CountryExceptionBankGroup_temp](
  CONSTRAINT [PK_Table_1] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryExceptionBankGroup_temp] ADD  CONSTRAINT [DF_CountryExceptionBankGroup_temp_CreditBusiness]  DEFAULT ((0)) FOR [CreditBusiness]
 GO
@@ -2457,8 +2612,8 @@ CREATE TABLE [dbo].[CountryFocus](
  CONSTRAINT [PK_CountryFocus] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -2487,8 +2642,8 @@ CREATE TABLE [dbo].[CountryFocus_his](
  CONSTRAINT [PK_CountryFocus_his] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryFocus_his] ADD  CONSTRAINT [DF_CountryFocus_his_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -2516,8 +2671,8 @@ CREATE TABLE [dbo].[CountryFocus_temp](
  CONSTRAINT [PK_CountryFocus_temp] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryFocus_temp] ADD  CONSTRAINT [DF_CountryFocus_temp_Completion_date]  DEFAULT (getdate()) FOR [Approval_date]
 GO
@@ -2533,8 +2688,8 @@ CREATE TABLE [dbo].[CountryForexRateMapping](
 (
 	[CountryCode2] ASC,
 	[ForexRateCode] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -2569,12 +2724,12 @@ CREATE TABLE [dbo].[CountryMaster](
  CONSTRAINT [PK_CountryMaster] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [IX_CountryMaster_1] UNIQUE NONCLUSTERED
 (
 	[CountryCode2] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryMaster] ADD  CONSTRAINT [DF_CountryMaster_CountryCode2]  DEFAULT ('') FOR [CountryCode2]
 GO
@@ -2698,8 +2853,8 @@ CREATE TABLE [dbo].[CountryMaster_his](
  CONSTRAINT [PK__CountryM__9E2397E0E71DF61A] PRIMARY KEY CLUSTERED
 (
 	[log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryMaster_his] ADD  CONSTRAINT [DF_CountryMaster_his_ExceptionExplain]  DEFAULT ('') FOR [ExceptionExplain]
 GO
@@ -2755,8 +2910,8 @@ CREATE TABLE [dbo].[CountryMaster_temp](
  CONSTRAINT [PK__CountryM__06C703C165F6C02C] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryMaster_temp] ADD  CONSTRAINT [DF_CountryMaster_temp_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -2807,8 +2962,8 @@ CREATE TABLE [dbo].[CountryOutlookReport](
  CONSTRAINT [PK_CountryOutlookReport] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryOutlookReport] ADD  CONSTRAINT [DF_CountryOutlookReport_IsActive]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -2859,8 +3014,8 @@ CREATE TABLE [dbo].[CountryOutlookReport_his](
  CONSTRAINT [PK__CountryO__2D21E3B62FDE61CC] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryOutlookReport_his] ADD  CONSTRAINT [DF__CountryOu__IsAct__6715F92A]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -2900,8 +3055,8 @@ CREATE TABLE [dbo].[CountryOutlookReport_Source](
  CONSTRAINT [PK_CountryOutlookReport_Source] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryOutlookReport_Source] ADD  CONSTRAINT [DF_CountryOutlookReport_Source_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -2948,8 +3103,8 @@ CREATE TABLE [dbo].[CountryOutlookReport_temp](
  CONSTRAINT [PK__CountryO__06C703C14759D8AC] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryOutlookReport_temp] ADD  CONSTRAINT [DF__CountryOu__IsAct__6068FB9B]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -2974,8 +3129,8 @@ CREATE TABLE [dbo].[CountryOutlookReport_Views](
  CONSTRAINT [PK_CountryOutlookReport_Views] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CountryOutlookReport_Views] ADD  CONSTRAINT [DF_CountryOutlookReport_Views_Views]  DEFAULT ((0)) FOR [Views]
 GO
@@ -2993,14 +3148,14 @@ CREATE TABLE [dbo].[CountryWeightPercent](
  CONSTRAINT [PK_CountryWeightPercent] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_CountryWeightPercent] ON [dbo].[CountryWeightPercent]
 (
 	[CountryId] ASC,
 	[WeightPercent] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[CountryWeightPercent] ADD  CONSTRAINT [DF_CountryWeightPercent_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3019,8 +3174,8 @@ CREATE TABLE [dbo].[CreditRating_AllBmi](
  CONSTRAINT [PK_BMICountryRisk_temp] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_CreditRating_AllBmi_Country_Year_Category] ON [dbo].[CreditRating_AllBmi]
 (
@@ -3028,7 +3183,7 @@ CREATE NONCLUSTERED INDEX [IX_CreditRating_AllBmi_Country_Year_Category] ON [dbo
 	[Year] ASC,
 	[FK_CategoriesId] ASC
 )
-INCLUDE([Score]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([Score]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[CreditRating_AllBmi] ADD  CONSTRAINT [DF_BMICountryRisk_temp_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3079,15 +3234,15 @@ CREATE TABLE [dbo].[CreditRating_Bmi](
  CONSTRAINT [PK_BMICountryRisk] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_Bmi_CountryYear] ON [dbo].[CreditRating_Bmi]
 (
 	[FK_Country_Id] ASC,
 	[Year] ASC
 )
-INCLUDE([BMI_GDP_NOM_USD_AVE],[BMI_GDP_REAL_PCTCH],[BMI_INFLATION_CPI_AVE_UNIT],[BMI_LABOUR_UNEMP_PCT_AVE_UNIT],[BMI_RESERVES_IMPCOVER],[BMI_DEBT_EXT_PCGDP],[BMI_DEBT_EXT_ST_PCTEXTDEBT],[BMI_FISCAL_BALANCE_PCTGDP],[BMI_DEBT_GOVT_PCGDP],[BMI_INDEX_POLRISK_UNIT_50046_E],[BMI_INDEX_POLRISK_SECURITY_UNIT_10012_E]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([BMI_GDP_NOM_USD_AVE],[BMI_GDP_REAL_PCTCH],[BMI_INFLATION_CPI_AVE_UNIT],[BMI_LABOUR_UNEMP_PCT_AVE_UNIT],[BMI_RESERVES_IMPCOVER],[BMI_DEBT_EXT_PCGDP],[BMI_DEBT_EXT_ST_PCTEXTDEBT],[BMI_FISCAL_BALANCE_PCTGDP],[BMI_DEBT_GOVT_PCGDP],[BMI_INDEX_POLRISK_UNIT_50046_E],[BMI_INDEX_POLRISK_SECURITY_UNIT_10012_E]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[CreditRating_Bmi] ADD  CONSTRAINT [DF_BMICountryRisk_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -3119,8 +3274,8 @@ CREATE TABLE [dbo].[CreditRating_BmiRule](
  CONSTRAINT [PK__BMIScori__F4A24B2259A9FA85] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
@@ -3130,7 +3285,7 @@ CREATE NONCLUSTERED INDEX [IX_BmiRule_RuleName_Active] ON [dbo].[CreditRating_Bm
 	[IsActive] ASC,
 	[ScoreLevel] ASC
 )
-INCLUDE([MinValue],[MaxValue],[Score]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([MinValue],[MaxValue],[Score]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[CreditRating_BmiRule] ADD  CONSTRAINT [DF__CreditRat__IsDis__33E06DE7]  DEFAULT ((1)) FOR [IsDisplay]
 GO
@@ -3148,14 +3303,14 @@ CREATE TABLE [dbo].[CreditRating_CountApi](
  CONSTRAINT [PK_CreditRating_CountApi] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_CreditRating_CountApi_Agency_Type] ON [dbo].[CreditRating_CountApi]
 (
 	[FK_RatingAgency_Id] ASC,
 	[CreditRatingType] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[CreditRating_CountApi] ADD  CONSTRAINT [DF_CreditRating_CountApi_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3208,8 +3363,8 @@ CREATE TABLE [dbo].[CreditRating_CountBmi](
  CONSTRAINT [PK_TotalCountryRating] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -3230,14 +3385,14 @@ CREATE TABLE [dbo].[CreditRating_Country](
  CONSTRAINT [PK__CountryCreditRating_his] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [IX_CreditRating_Country_Week] UNIQUE NONCLUSTERED
 (
 	[date] ASC,
 	[FK_Country_Id] ASC,
 	[FK_RatingAgency_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_CreditRating_Country_Lookup] ON [dbo].[CreditRating_Country]
 (
@@ -3245,7 +3400,7 @@ CREATE NONCLUSTERED INDEX [IX_CreditRating_Country_Lookup] ON [dbo].[CreditRatin
 	[FK_RatingAgency_Id] ASC,
 	[date] ASC
 )
-INCLUDE([AgencyRating],[RatingOutlook],[RatingOutlookDate],[RatingDate],[Create_date]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([AgencyRating],[RatingOutlook],[RatingOutlookDate],[RatingDate],[Create_date]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[CreditRating_Country] ADD  CONSTRAINT [DF_CountryCreditRating_his_AgencyRating]  DEFAULT ('') FOR [AgencyRating]
 GO
@@ -3297,13 +3452,13 @@ CREATE TABLE [dbo].[CreditRating_Country_Current](
  CONSTRAINT [PK_CreditRating_Country_Current] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [UQ_CreditRating_Country_Current_Agency_Country] UNIQUE NONCLUSTERED
 (
 	[FK_RatingAgency_Id] ASC,
 	[FK_Country_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -3318,13 +3473,13 @@ CREATE TABLE [dbo].[CreditRating_Country_Log](
  CONSTRAINT [PK_CreditRating_Country_Log] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [UQ_CreditRating_Country_Log_Country_BusinessDate] UNIQUE NONCLUSTERED
 (
 	[FK_CountryId] ASC,
 	[BusinessDate] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -3345,14 +3500,14 @@ CREATE TABLE [dbo].[CreditRating_Country_Log_Detail](
  CONSTRAINT [PK_CreditRating_Country_Log_Detail] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [UQ_CreditRating_Country_Log_Detail_Country_Agency_BusinessDate] UNIQUE NONCLUSTERED
 (
 	[FK_Country_Id] ASC,
 	[FK_RatingAgency_Id] ASC,
 	[BusinessDate] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -3366,15 +3521,15 @@ CREATE TABLE [dbo].[CreditRating_Country_M](
  CONSTRAINT [PK_CreditRating_Country_M] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_CreditRating_Country_M_Country_CreateDate] ON [dbo].[CreditRating_Country_M]
 (
 	[FK_CountryId] ASC,
 	[Create_date] DESC
 )
-INCLUDE([Score]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([Score]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[CreditRating_Country_M] ADD  CONSTRAINT [DF_CreditRating_Country_M_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3395,15 +3550,15 @@ CREATE TABLE [dbo].[CreditRating_CountryId](
 (
 	[FK_AgencyCode_Id] ASC,
 	[FK_Country_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_CreditRating_CountryId_Agency_Country] ON [dbo].[CreditRating_CountryId]
 (
 	[FK_AgencyCode_Id] ASC,
 	[FK_Country_Id] ASC
 )
-INCLUDE([EntityId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([EntityId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[CreditRating_CountryId] ADD  CONSTRAINT [DF_CountryCreditIdList_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3442,8 +3597,8 @@ CREATE TABLE [dbo].[CreditRating_ErrorCountry](
  CONSTRAINT [PK_CreditRating_ErrorCountry] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CreditRating_ErrorCountry] ADD  CONSTRAINT [DF_CreditRating_ErrorCountry_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3464,8 +3619,8 @@ CREATE TABLE [dbo].[CreditRating_ErrorISIN](
  CONSTRAINT [PK_CreditRating_ErrorISIN] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CreditRating_ErrorISIN] ADD  CONSTRAINT [DF_CreditRating_ErrorISIN_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3486,8 +3641,8 @@ CREATE TABLE [dbo].[CreditRating_ErrorLEI](
  CONSTRAINT [PK_CreditRating_ErrorLEI] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CreditRating_ErrorLEI] ADD  CONSTRAINT [DF_CreditRating_ErrorLEI_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3514,8 +3669,8 @@ CREATE TABLE [dbo].[CreditRating_LEI](
  CONSTRAINT [PK_CreditRating_LEI] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CreditRating_LEI] ADD  CONSTRAINT [DF_CreditRating_LEI_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3535,8 +3690,8 @@ CREATE TABLE [dbo].[CreditRating_ScoreMapping](
  CONSTRAINT [PK__RatingSc__F4A24BC2734E8330] PRIMARY KEY CLUSTERED
 (
 	[PK_ID] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CreditRating_ScoreMapping] ADD  CONSTRAINT [DF_RatingScoreMapping_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -3563,8 +3718,8 @@ CREATE TABLE [dbo].[CreditRating_ScoreMapping_his](
  CONSTRAINT [PK__RatingSc__9E2397E01936EAFB] PRIMARY KEY CLUSTERED
 (
 	[log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CreditRating_ScoreMapping_his] ADD  CONSTRAINT [DF_RatingScoreMapping_his_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -3598,8 +3753,8 @@ CREATE TABLE [dbo].[CreditRating_ScoreMapping_temp](
  CONSTRAINT [PK__RatingSc__06C703C17AFF38CC] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CreditRating_ScoreMapping_temp] ADD  CONSTRAINT [DF_RatingScoreMapping_temp_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -3625,8 +3780,8 @@ CREATE TABLE [dbo].[CreditRating_Token](
  CONSTRAINT [PK_CreditRatingsToken] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CreditRating_Token] ADD  CONSTRAINT [DF_CreditRatingsToken_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3645,8 +3800,8 @@ CREATE TABLE [dbo].[CreditRatingMaster](
  CONSTRAINT [PK__RatingMa__F4A24BC2B3AEF876] PRIMARY KEY CLUSTERED
 (
 	[PK_ID] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[CreditRatingMaster] ADD  CONSTRAINT [DF_RatingAgencyMaster_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -3677,8 +3832,8 @@ CREATE TABLE [dbo].[Customer](
  CONSTRAINT [PK_Customer] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
@@ -3686,12 +3841,12 @@ CREATE NONCLUSTERED INDEX [IX_Customer_CustomerMark_Match] ON [dbo].[Customer]
 (
 	[GroupId] ASC,
 	[CustomerMark] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 CREATE NONCLUSTERED INDEX [IX_Customer_GroupId] ON [dbo].[Customer]
 (
 	[GroupId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ANSI_PADDING ON
 GO
@@ -3699,7 +3854,7 @@ CREATE NONCLUSTERED INDEX [IX_Customer_ISIN] ON [dbo].[Customer]
 (
 	[ISIN] ASC
 )
-INCLUDE([GroupId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([GroupId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ANSI_PADDING ON
 GO
@@ -3709,7 +3864,7 @@ CREATE NONCLUSTERED INDEX [IX_Customer_ISIN_Match] ON [dbo].[Customer]
 )
 INCLUDE([GroupId])
 WHERE ([ISIN] IS NOT NULL AND [ISIN]<>'')
-WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ANSI_PADDING ON
 GO
@@ -3717,7 +3872,7 @@ CREATE NONCLUSTERED INDEX [IX_Customer_LEI] ON [dbo].[Customer]
 (
 	[LEI] ASC
 )
-INCLUDE([GroupId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([GroupId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ANSI_PADDING ON
 GO
@@ -3727,7 +3882,7 @@ CREATE NONCLUSTERED INDEX [IX_Customer_LEI_Match] ON [dbo].[Customer]
 )
 INCLUDE([GroupId])
 WHERE ([LEI] IS NOT NULL AND [LEI]<>'')
-WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ANSI_PADDING ON
 GO
@@ -3735,7 +3890,7 @@ CREATE NONCLUSTERED INDEX [IX_Customer_SwiftCode] ON [dbo].[Customer]
 (
 	[SwiftCode] ASC
 )
-INCLUDE([GroupId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([GroupId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ARITHABORT ON
 SET CONCAT_NULL_YIELDS_NULL ON
@@ -3751,7 +3906,7 @@ CREATE NONCLUSTERED INDEX [IX_Customer_SwiftCode4_Match] ON [dbo].[Customer]
 )
 INCLUDE([GroupId])
 WHERE ([SwiftCode] IS NOT NULL AND [SwiftCode]<>'')
-WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ANSI_PADDING ON
 GO
@@ -3760,7 +3915,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [UX_Customer_Name_Unit] ON [dbo].[Customer]
 	[CustomerName] ASC,
 	[Unit] ASC,
 	[CustomerId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[Customer] ADD  CONSTRAINT [DF_Customer_IsSystem]  DEFAULT ((1)) FOR [IsSystem]
 GO
@@ -3817,8 +3972,8 @@ CREATE TABLE [dbo].[Customer_his](
  CONSTRAINT [PK__Customer__2D26E78E5F476C2D] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Customer_his] ADD  CONSTRAINT [DF__Customer___SysCr__25083EAB]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -3853,8 +4008,8 @@ CREATE TABLE [dbo].[Customer_temp](
  CONSTRAINT [PK__Customer__06C703C189975D63] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Customer_temp] ADD  CONSTRAINT [DF__Customer___IsSys__1B7ED471]  DEFAULT ((1)) FOR [IsSystem]
 GO
@@ -3890,8 +4045,8 @@ CREATE TABLE [dbo].[DAILY_CIF_TMP](
  CONSTRAINT [PK_DAILY_CIF_TMP] PRIMARY KEY CLUSTERED
 (
 	[CIF_ID_NO] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
@@ -3915,8 +4070,8 @@ CREATE TABLE [dbo].[ExcelTemplate](
  CONSTRAINT [PK_ExcelTemplate] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
@@ -3925,7 +4080,7 @@ CREATE NONCLUSTERED INDEX [IX_ExcelTemplate] ON [dbo].[ExcelTemplate]
 	[Excel_Template_Code] ASC,
 	[Excel_Template_Filename] ASC,
 	[Excel_Sheet_Name] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[ExcelTemplate] ADD  CONSTRAINT [DF_ExcelTemplate_Excel_Template_Code]  DEFAULT ('') FOR [Excel_Template_Code]
 GO
@@ -3981,8 +4136,8 @@ CREATE TABLE [dbo].[FeatureDetail](
  CONSTRAINT [PK_FEATURE] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FeatureDetail] ADD  CONSTRAINT [DF_FEATURE_Feature_Describe]  DEFAULT ('') FOR [Feature_Describe]
 GO
@@ -4016,8 +4171,8 @@ CREATE TABLE [dbo].[FileCenter](
  CONSTRAINT [PK_FileCenter] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FileCenter] ADD  CONSTRAINT [DF_FileCenter_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -4056,8 +4211,8 @@ CREATE TABLE [dbo].[FileCenter_Downloads](
  CONSTRAINT [PK_FileCenter_Downloads] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FileCenter_Downloads] ADD  CONSTRAINT [DF_FileCenter_Downloads_Downloads]  DEFAULT ((0)) FOR [Downloads]
 GO
@@ -4078,8 +4233,8 @@ CREATE TABLE [dbo].[FinancialProductMaster](
  CONSTRAINT [PK__Financia__F4A24BC2373C7412] PRIMARY KEY CLUSTERED
 (
 	[PK_ID] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FinancialProductMaster] ADD  CONSTRAINT [DF_FinancialProductMaster_IsActive]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -4129,8 +4284,8 @@ CREATE TABLE [dbo].[FinancialProductMaster_his](
  CONSTRAINT [PK__Financia__2D26E78E6A71B569] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FinancialProductMaster_his] ADD  CONSTRAINT [DF__Financial__SysCr__2CD37DA5]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -4158,8 +4313,8 @@ CREATE TABLE [dbo].[FinancialProductMaster_temp](
  CONSTRAINT [PK__Financia__06C703C14E5F190D] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FinancialProductMaster_temp] ADD  CONSTRAINT [DF__Financial__IsAct__2FAFEA50]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -4194,8 +4349,8 @@ CREATE TABLE [dbo].[FinancialRiskFactorData](
  CONSTRAINT [PK__Financia__F4A24BC24E8BFDB1] PRIMARY KEY CLUSTERED
 (
 	[PK_ID] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorData] ADD  CONSTRAINT [DF_FinancialRiskFactorData_Create_Date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -4223,8 +4378,8 @@ CREATE TABLE [dbo].[FinancialRiskFactorData_his](
  CONSTRAINT [PK__Financia__2D21E3B6961DAD7C] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorData_his] ADD  CONSTRAINT [DF__Financial__SysCr__38453051]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -4258,8 +4413,8 @@ CREATE TABLE [dbo].[FinancialRiskFactorData_temp](
  CONSTRAINT [PK__Financia__06C703C1E0839792] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorData_temp] ADD  CONSTRAINT [DF__Financial__Creat__3B219CFC]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -4295,8 +4450,8 @@ CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay](
  CONSTRAINT [PK__Financia__F4A24BC22B9435D7] PRIMARY KEY CLUSTERED
 (
 	[PK_ID] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorPeriodDay] ADD  CONSTRAINT [DF_FinancialRiskFactorPeriodDay_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO
@@ -4325,8 +4480,8 @@ CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay_his](
  CONSTRAINT [PK__Financia__2D21E3B63246A814] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorPeriodDay_his] ADD  CONSTRAINT [DF__Financial__SysCr__44AB0736]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -4361,8 +4516,8 @@ CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay_temp](
  CONSTRAINT [PK__Financia__06C703C1D1A2D7A9] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorPeriodDay_temp] ADD  CONSTRAINT [DF__Financial__Creat__3FE65219]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -4404,7 +4559,7 @@ CREATE TABLE [dbo].[FL_FLMST_D_MF](
 	[FLMST_FINAL_RISK_CNTY] [nvarchar](4) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_Date] [date] NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FL_FLMST_D_MF] ADD  CONSTRAINT [DF_FL_FLMST_D_MF_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO
@@ -4477,8 +4632,8 @@ CREATE TABLE [dbo].[Flow](
  CONSTRAINT [PK_Flow] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
@@ -4512,8 +4667,8 @@ CREATE TABLE [dbo].[FlowDetail](
  CONSTRAINT [PK_FlowDetail] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
@@ -4533,8 +4688,8 @@ CREATE TABLE [dbo].[FlowFileMapping](
  CONSTRAINT [PK__Flow_att__F4A24BC22201BC54] PRIMARY KEY CLUSTERED
 (
 	[PK_ID] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FlowFileMapping] ADD  CONSTRAINT [DF_FlowFileMapping_IsActive]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -4573,8 +4728,8 @@ CREATE TABLE [dbo].[FlowForm](
  CONSTRAINT [PK__FLOW_FOR__F4A24BC2CE3A3F8B] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FlowForm] ADD  CONSTRAINT [DF_FlowForm_ApplicantGroupCode]  DEFAULT ('') FOR [ApplicantGroupCode]
 GO
@@ -4620,8 +4775,8 @@ CREATE TABLE [dbo].[FlowForm_LoanMain](
  CONSTRAINT [PK_FlowForm_LoanMain] PRIMARY KEY CLUSTERED
 (
 	[FlowFormId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FlowForm_LoanMain] ADD  CONSTRAINT [DF__FlowForm___LoanM__46741F6E]  DEFAULT ((0)) FOR [LoanMethodType]
 GO
@@ -4645,8 +4800,8 @@ CREATE TABLE [dbo].[FlowModifyRecord](
  CONSTRAINT [PK_FlowModifyRecord] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FlowModifyRecord] ADD  CONSTRAINT [DF_FlowModifyRecord_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -4673,8 +4828,8 @@ CREATE TABLE [dbo].[FlowRecord](
  CONSTRAINT [PK__FLOW_REC__F4A5475AB0442D71] PRIMARY KEY CLUSTERED
 (
 	[PK_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FlowRecord] ADD  CONSTRAINT [DF_FlowRecord_OriginHandler]  DEFAULT ('') FOR [OriginHandler]
 GO
@@ -4704,8 +4859,8 @@ CREATE TABLE [dbo].[FlowUserReset](
  CONSTRAINT [PK_FlowUserReset] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -4727,7 +4882,7 @@ CREATE TABLE [dbo].[FM_FMLINE_D_MF](
 	[FMLINE_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_Date] [date] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FM_FMLINE_D_MF] ADD  CONSTRAINT [DF_FM_FMLINE_D_MF_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO
@@ -4746,8 +4901,8 @@ CREATE TABLE [dbo].[ForexRate](
 (
 	[ForexRateCode] ASC,
 	[ForexRateDate] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -4765,8 +4920,8 @@ CREATE TABLE [dbo].[FPEXR_STG](
 (
 	[FPEXR_CRCY_CODE] ASC,
 	[FPEXR_DATE] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -4793,8 +4948,8 @@ CREATE TABLE [dbo].[Global](
  CONSTRAINT [PK_M_Combolist_1] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
@@ -4835,8 +4990,8 @@ CREATE TABLE [dbo].[GroupIdCounter](
  CONSTRAINT [PK_GroupIdCounter] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[GroupIdCounter] ADD  CONSTRAINT [DF_GroupIdCounter_GroupCount]  DEFAULT ((0)) FOR [GroupCount]
 GO
@@ -4867,8 +5022,8 @@ CREATE TABLE [dbo].[HRIS_Origin](
  CONSTRAINT [PK_HRIS_Origin] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[HRIS_Origin] ADD  CONSTRAINT [DF_HRIS_Origin_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -4888,8 +5043,8 @@ CREATE TABLE [dbo].[i18nText](
  CONSTRAINT [PK_i18n_text] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -4910,13 +5065,13 @@ CREATE TABLE [dbo].[INDUSTRY](
  CONSTRAINT [PK_INDUSTRY] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [IX_INDUSTRY] UNIQUE NONCLUSTERED
 (
 	[INDCODE] ASC,
 	[TYPE] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[INDUSTRY] ADD  CONSTRAINT [DF_INDUSTRY_major_name]  DEFAULT ('') FOR [Major_Name]
 GO
@@ -4959,8 +5114,8 @@ CREATE TABLE [dbo].[INDUSTRY_Internal](
  CONSTRAINT [PK_INDUSTRY_Internal] PRIMARY KEY CLUSTERED
 (
 	[CustomerId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -4975,8 +5130,8 @@ CREATE TABLE [dbo].[INDUSTRY_Overseas](
 (
 	[BranchCode] ASC,
 	[CustomerId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -4996,8 +5151,8 @@ CREATE TABLE [dbo].[LoanApprovalEntry](
 	[LoanMainId] ASC,
 	[BranchCode] ASC,
 	[EntryNo] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[LoanApprovalEntry] ADD  CONSTRAINT [DF__LoanAppro__SortO__51E5D21A]  DEFAULT ((0)) FOR [SortOrder]
 GO
@@ -5015,8 +5170,8 @@ CREATE TABLE [dbo].[LoanBranchApproveAmountHis](
  CONSTRAINT [PK_LoanBranchApproveAmountHis] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5042,8 +5197,8 @@ CREATE TABLE [dbo].[LoanBranchData](
  CONSTRAINT [PK_LoanBranchData] PRIMARY KEY CLUSTERED
 (
 	[LoanMainId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[LoanBranchData] ADD  CONSTRAINT [DF__LoanBranc__IsFir__4A44B052]  DEFAULT ((1)) FOR [IsFirstTime]
 GO
@@ -5065,8 +5220,8 @@ CREATE TABLE [dbo].[LoanExtApp](
  CONSTRAINT [PK_LoanExtApp] PRIMARY KEY CLUSTERED
 (
 	[ExtFlowFormId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5087,8 +5242,8 @@ CREATE TABLE [dbo].[LoanMainUnitData](
  CONSTRAINT [PK_LoanMainUnitData] PRIMARY KEY CLUSTERED
 (
 	[LoanMainId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[LoanMainUnitData] ADD  CONSTRAINT [DF__LoanMainU__IsNee__5892CFA9]  DEFAULT ((0)) FOR [IsNeedRunLoanUnit]
 GO
@@ -5106,7 +5261,7 @@ CREATE TABLE [dbo].[LS_LSRSA_D_MF](
 	[COUNTRY] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL
-)
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5132,8 +5287,8 @@ CREATE TABLE [dbo].[m_parameter](
 (
 	[system_code] ASC,
 	[field_code] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_field_name]  DEFAULT ('') FOR [field_name]
 GO
@@ -5181,8 +5336,8 @@ CREATE TABLE [dbo].[Mail](
  CONSTRAINT [PK_Mail] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Mail] ADD  CONSTRAINT [DF_Mail_List_Name]  DEFAULT ('') FOR [List_Name]
 GO
@@ -5241,8 +5396,8 @@ CREATE TABLE [dbo].[Mail_his](
  CONSTRAINT [PK__Mail_his__2D26E78EB60E73D1] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Mail_his] ADD  CONSTRAINT [DF__Mail_his__SysCre__0BA79404]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5273,8 +5428,8 @@ CREATE TABLE [dbo].[Mail_temp](
  CONSTRAINT [PK__Mail_tem__06C703C1D1BB657D] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
@@ -5283,7 +5438,7 @@ CREATE NONCLUSTERED INDEX [IX_Mail_temp_UnitCode_FlowFormId] ON [dbo].[Mail_temp
 	[UnitCode] ASC,
 	[FlowFormId] ASC
 )
-INCLUDE([PK_Id],[TempId],[Mail_Type]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([PK_Id],[TempId],[Mail_Type]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[Mail_temp] ADD  CONSTRAINT [DF__Mail_temp__SysCr__0E8400AF]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5302,8 +5457,8 @@ CREATE TABLE [dbo].[MailCcMapping](
  CONSTRAINT [PK_MailCcMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5323,8 +5478,8 @@ CREATE TABLE [dbo].[MailCcMapping_his](
  CONSTRAINT [PK__MailCcMa__2D21E3B66A268ACA] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailCcMapping_his] ADD  CONSTRAINT [DF__MailCcMap__SysCr__501CB9E2]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5354,14 +5509,14 @@ CREATE TABLE [dbo].[MailCcMapping_temp](
  CONSTRAINT [PK__MailCcMa__06C703C1A952591A] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_MailCcMapping_temp_FK_TempId] ON [dbo].[MailCcMapping_temp]
 (
 	[FK_TempId] ASC
 )
-INCLUDE([FK_UserId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([FK_UserId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[MailCcMapping_temp] ADD  CONSTRAINT [DF__MailCcMap__SysCr__52F9268D]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5388,8 +5543,8 @@ CREATE TABLE [dbo].[MailCustomCcMapping](
  CONSTRAINT [PK_MailCustomCcMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5409,8 +5564,8 @@ CREATE TABLE [dbo].[MailCustomCcMapping_his](
  CONSTRAINT [PK__MailCust__2D21E3B679C2AF6D] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailCustomCcMapping_his] ADD  CONSTRAINT [DF__MailCusto__SysCr__7B0717E7]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5440,8 +5595,8 @@ CREATE TABLE [dbo].[MailCustomCcMapping_temp](
  CONSTRAINT [PK__MailCust__06C703C1C4805123] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailCustomCcMapping_temp] ADD  CONSTRAINT [DF__MailCusto__SysCr__55D59338]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5468,8 +5623,8 @@ CREATE TABLE [dbo].[MailCustomToMapping](
  CONSTRAINT [PK_MailCustomToMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5489,8 +5644,8 @@ CREATE TABLE [dbo].[MailCustomToMapping_his](
  CONSTRAINT [PK__MailCust__2D21E3B6EEC8E570] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailCustomToMapping_his] ADD  CONSTRAINT [DF__MailCusto__SysCr__7DE38492]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5520,8 +5675,8 @@ CREATE TABLE [dbo].[MailCustomToMapping_temp](
  CONSTRAINT [PK__MailCust__06C703C1831CEE1B] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailCustomToMapping_temp] ADD  CONSTRAINT [DF__MailCusto__SysCr__58B1FFE3]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5554,8 +5709,8 @@ CREATE TABLE [dbo].[MailGroup](
  CONSTRAINT [PK_MailGroup] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailGroup] ADD  CONSTRAINT [DF_MailGroup_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5576,8 +5731,8 @@ CREATE TABLE [dbo].[MailGroupCcMapping](
  CONSTRAINT [PK_MailGroupToCCMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailGroupCcMapping] ADD  CONSTRAINT [DF_MailGroupToCCMapping_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5599,8 +5754,8 @@ CREATE TABLE [dbo].[MailGroupCcMapping_his](
  CONSTRAINT [PK__MailGrou__2D21E3B6D265B29C] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailGroupCcMapping_his] ADD  CONSTRAINT [DF__MailGroup__SysCr__26268016]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5630,14 +5785,14 @@ CREATE TABLE [dbo].[MailGroupCcMapping_temp](
  CONSTRAINT [PK__MailGrou__06C703C18AB44C7F] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_MailGroupToCCMapping_temp_FK_TempId] ON [dbo].[MailGroupCcMapping_temp]
 (
 	[FK_TempId] ASC
 )
-INCLUDE([MailGroupId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([MailGroupId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[MailGroupCcMapping_temp] ADD  CONSTRAINT [DF__MailGroup__Creat__2902ECC1]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5666,8 +5821,8 @@ CREATE TABLE [dbo].[MailGroupMapping](
  CONSTRAINT [PK_MailGroupMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailGroupMapping] ADD  CONSTRAINT [DF_MailGroupMapping_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5689,8 +5844,8 @@ CREATE TABLE [dbo].[MailGroupMapping_his](
  CONSTRAINT [PK__MailGrou__2D26E78E3C4A8F62] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailGroupMapping_his] ADD  CONSTRAINT [DF__MailGroup__SysCr__33B5855E]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5714,14 +5869,14 @@ CREATE TABLE [dbo].[MailGroupMapping_temp](
  CONSTRAINT [PK__MailGrou__06C703C1E617227D] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_MailGroupMapping_temp_FK_TempId] ON [dbo].[MailGroupMapping_temp]
 (
 	[FK_TempId] ASC
 )
-INCLUDE([MailGroupId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([MailGroupId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[MailGroupMapping_temp] ADD  CONSTRAINT [DF__MailGroup__SysCr__2FE4F47A]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5740,14 +5895,14 @@ CREATE TABLE [dbo].[MailGroupUser](
  CONSTRAINT [PK_MailGroupUser] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_MailGroupUser] ON [dbo].[MailGroupUser]
 (
 	[PK_Id] ASC,
 	[MailGroup_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[MailGroupUser] ADD  CONSTRAINT [DF_MailGroupUser_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5769,8 +5924,8 @@ CREATE TABLE [dbo].[MailLog](
  CONSTRAINT [PK_MailLog] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailLog] ADD  CONSTRAINT [DF_MailLog_IsSystem]  DEFAULT ((1)) FOR [IsSystem]
 GO
@@ -5789,8 +5944,8 @@ CREATE TABLE [dbo].[MailLog_CcCustomMapping](
  CONSTRAINT [PK_MailLog_CcCustomMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5803,8 +5958,8 @@ CREATE TABLE [dbo].[MailLog_CcGroupMapping](
  CONSTRAINT [PK_Mail_CcGroupMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5817,8 +5972,8 @@ CREATE TABLE [dbo].[MailLog_CcMapping](
  CONSTRAINT [PK_MailLog_CcMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5831,8 +5986,8 @@ CREATE TABLE [dbo].[MailLog_CustomMapping](
  CONSTRAINT [PK_MailLog_CustomMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5846,8 +6001,8 @@ CREATE TABLE [dbo].[MailLog_FileMapping](
  CONSTRAINT [PK_MailLog_FileMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5860,8 +6015,8 @@ CREATE TABLE [dbo].[MailLog_GroupMapping](
  CONSTRAINT [PK_MailLog_GroupMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5874,8 +6029,8 @@ CREATE TABLE [dbo].[MailLog_Mapping](
  CONSTRAINT [PK_MailLog_Mapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5890,8 +6045,8 @@ CREATE TABLE [dbo].[MailToMapping](
  CONSTRAINT [PK_MailToMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -5911,8 +6066,8 @@ CREATE TABLE [dbo].[MailToMapping_his](
  CONSTRAINT [PK__MailToMa__2D21E3B6B50010F2] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MailToMapping_his] ADD  CONSTRAINT [DF__MailToMap__SysCr__6F95653B]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5942,14 +6097,14 @@ CREATE TABLE [dbo].[MailToMapping_temp](
  CONSTRAINT [PK__MailToMa__06C703C1BC325BD3] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_MailToMapping_temp_FK_TempId] ON [dbo].[MailToMapping_temp]
 (
 	[FK_TempId] ASC
 )
-INCLUDE([FK_UserId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([FK_UserId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[MailToMapping_temp] ADD  CONSTRAINT [DF__MailToMap__SysCr__5B8E6C8E]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5991,8 +6146,8 @@ CREATE TABLE [dbo].[Menu](
  CONSTRAINT [PK_Menu_1] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
@@ -6013,8 +6168,8 @@ CREATE TABLE [dbo].[MIS_CRCY_REF](
  CONSTRAINT [PK_MIS_CRCY_REF_1] PRIMARY KEY CLUSTERED
 (
 	[CRCY_CODE] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
@@ -6074,8 +6229,8 @@ CREATE TABLE [dbo].[MONITORDATA](
  CONSTRAINT [PK_MONITORDATA] PRIMARY KEY CLUSTERED
 (
 	[PK_ID] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
@@ -6086,7 +6241,7 @@ CREATE NONCLUSTERED INDEX [IX_MONITORDATA_ASOFDATE_MARK] ON [dbo].[MONITORDATA]
 	[PRODUCT_TYPE] ASC,
 	[MATURITY_DATE] ASC
 )
-INCLUDE([PK_ID],[GROUP_NO],[UNIT_NO],[BRANCH_NO],[Create_DateTime],[Create_user]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([PK_ID],[GROUP_NO],[UNIT_NO],[BRANCH_NO],[Create_DateTime],[Create_user]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ANSI_PADDING ON
 GO
@@ -6097,7 +6252,7 @@ CREATE NONCLUSTERED INDEX [IX_MONITORDATA_ASOFDATE_PAGING] ON [dbo].[MONITORDATA
 	[UNIT_NO] ASC,
 	[BRANCH_NO] ASC
 )
-INCLUDE([PK_ID],[TRAN_NO],[Mark],[MATURITY_DATE],[PRODUCT_TYPE]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+INCLUDE([PK_ID],[TRAN_NO],[Mark],[MATURITY_DATE],[PRODUCT_TYPE]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 CREATE NONCLUSTERED INDEX [IX_MONITORDATA_DATE] ON [dbo].[MONITORDATA]
 (
@@ -6105,7 +6260,7 @@ CREATE NONCLUSTERED INDEX [IX_MONITORDATA_DATE] ON [dbo].[MONITORDATA]
 	[Year] ASC,
 	[Month] ASC,
 	[Week] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[MONITORDATA] ADD  CONSTRAINT [DF_MONITORDATA_REVOLVE_MK]  DEFAULT ((0)) FOR [REVOLVE_MK]
 GO
@@ -6244,8 +6399,8 @@ CREATE TABLE [dbo].[MONITORDATA_his](
  CONSTRAINT [PK__MONITORD__2D26E78EA4B1BE09] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MONITORDATA_his] ADD  CONSTRAINT [DF__MONITORDA__SysCr__2C745649]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6310,8 +6465,8 @@ CREATE TABLE [dbo].[MONITORDATA_temp](
  CONSTRAINT [PK__MONITORD__06C703C13456C90D] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[MONITORDATA_temp] ADD  CONSTRAINT [DF__MONITORDA__REVOL__24D33481]  DEFAULT ((0)) FOR [REVOLVE_MK]
 GO
@@ -6346,8 +6501,8 @@ CREATE TABLE [dbo].[News](
  CONSTRAINT [PK_News] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[News] ADD  CONSTRAINT [DF_News_Contents]  DEFAULT ('') FOR [Contents]
 GO
@@ -6381,8 +6536,8 @@ CREATE TABLE [dbo].[News_his](
  CONSTRAINT [PK__News_his__2D21E3B6405A97AA] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[News_his] ADD  CONSTRAINT [DF__News_his__Update__05CF8A74]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -6425,8 +6580,8 @@ CREATE TABLE [dbo].[News_temp](
  CONSTRAINT [PK__News_tem__06C703C185156229] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[News_temp] ADD  CONSTRAINT [DF__News_temp__Updat__0D7ACDDD]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -6449,8 +6604,8 @@ CREATE TABLE [dbo].[News_Views](
  CONSTRAINT [PK_News_Views] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -6463,8 +6618,8 @@ CREATE TABLE [dbo].[NewsCountryType](
  CONSTRAINT [PK_NewsCountryType] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -6486,8 +6641,8 @@ CREATE TABLE [dbo].[NewsCountryType_his](
  CONSTRAINT [PK__NewsCoun__2D21E3B66EFF1A35] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[NewsCountryType_his] ADD  CONSTRAINT [DF__NewsCount__SysCr__0F58F4AE]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6515,8 +6670,8 @@ CREATE TABLE [dbo].[NewsCountryType_temp](
  CONSTRAINT [PK__NewsCoun__06C703C191C6FBD2] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[NewsCountryType_temp] ADD  CONSTRAINT [DF__NewsCount__SysCr__6DF800E3]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6543,8 +6698,8 @@ CREATE TABLE [dbo].[NewsFileMapping](
  CONSTRAINT [PK_NewsFileMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -6565,8 +6720,8 @@ CREATE TABLE [dbo].[NewsFileMapping_his](
  CONSTRAINT [PK__NewsFile__2D21E3B633184D46] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[NewsFileMapping_his] ADD  CONSTRAINT [DF__NewsFileM__SysCr__12356159]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6596,8 +6751,8 @@ CREATE TABLE [dbo].[NewsFileMapping_temp](
  CONSTRAINT [PK__NewsFile__06C703C15E6CEB55] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[NewsFileMapping_temp] ADD  CONSTRAINT [DF__NewsFileM__SysCr__1333A733]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6625,8 +6780,8 @@ CREATE TABLE [dbo].[Notice](
  CONSTRAINT [PK_Notice] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -6641,13 +6796,13 @@ CREATE TABLE [dbo].[NoticeUser](
 (
 	[NoticeId] ASC,
 	[UserId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_NoticeUser] ON [dbo].[NoticeUser]
 (
 	[NoticeId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ANSI_NULLS ON
 GO
@@ -6663,8 +6818,8 @@ CREATE TABLE [dbo].[OldData_Quota](
 (
 	[ExcelName] ASC,
 	[CountryCode2] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -6680,8 +6835,8 @@ CREATE TABLE [dbo].[OldData_QuotaWeight](
  CONSTRAINT [PK_OldData_QuotaWeight] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -6697,8 +6852,8 @@ CREATE TABLE [dbo].[OldData_Rating](
 (
 	[ExcelName] ASC,
 	[CountryCode2] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -6722,7 +6877,7 @@ CREATE TABLE [dbo].[OS_LNSLMSD_D_MF](
 	[LNSLMSD_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[OS_LNSLMSD_D_MF] ADD  CONSTRAINT [DF_OS_LNSLMSD_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -6743,7 +6898,7 @@ CREATE TABLE [dbo].[OS_LNSLNKD_D_MF](
 	[LNSLNKD_LOAD_DATE] [date] NULL,
 	[LNSLNKD_LOAD_TIME] [char](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
@@ -6770,7 +6925,7 @@ CREATE TABLE [dbo].[OS_LNSMSTD_D_MF](
 	[LNSMSTD_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[OS_LNSMSTD_D_MF] ADD  CONSTRAINT [DF_OS_LNSMSTD_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -6813,7 +6968,7 @@ CREATE TABLE [dbo].[OS_LNSSECD_D_MF](
 	[LNSSECD_LOAD_DATE] [date] NULL,
 	[LNSSECD_LOAD_TIME] [char](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
@@ -6841,7 +6996,7 @@ CREATE TABLE [dbo].[OSBDKF02_MF](
 	[OSBDKF02_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[OSBDKF02_MF] ADD  CONSTRAINT [DF_OSBDKF02_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -6869,7 +7024,7 @@ CREATE TABLE [dbo].[OSFXKF02_MF](
 	[OSFXKF02_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[OSFXKF02_MF] ADD  CONSTRAINT [DF_OSFXKF02_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -6892,7 +7047,7 @@ CREATE TABLE [dbo].[OSISKF02_MF](
 	[OSISKF02_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[OSISKF02_MF] ADD  CONSTRAINT [DF_OSISKF02_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -6915,7 +7070,7 @@ CREATE TABLE [dbo].[OSMMKF02_MF](
 	[OSMMKF02_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[OSMMKF02_MF] ADD  CONSTRAINT [DF_OSMMKF02_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -6932,8 +7087,8 @@ CREATE TABLE [dbo].[Permissions](
  CONSTRAINT [PK_PERMISSIONS] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Permissions] ADD  CONSTRAINT [DF_PERMISSIONS_FK_Role_Id]  DEFAULT ((0)) FOR [FK_Role_Id]
 GO
@@ -6961,8 +7116,8 @@ CREATE TABLE [dbo].[Permissions_his](
  CONSTRAINT [PK_Permissions_his] PRIMARY KEY CLUSTERED
 (
 	[log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Permissions_his] ADD  CONSTRAINT [DF_Permissions_his_FK_Role_Id]  DEFAULT ('') FOR [FK_Role_Id]
 GO
@@ -6992,8 +7147,8 @@ CREATE TABLE [dbo].[Permissions_Query](
  CONSTRAINT [PK_Permissions_Query] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Permissions_Query] ADD  CONSTRAINT [DF_Permissions_Query_FK_Role_Id]  DEFAULT ((0)) FOR [FK_Role_Id]
 GO
@@ -7028,8 +7183,8 @@ CREATE TABLE [dbo].[Permissions_Query_his](
  CONSTRAINT [PK__Permissi__9E2397E072A11B54] PRIMARY KEY CLUSTERED
 (
 	[log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Permissions_Query_his] ADD  CONSTRAINT [DF_Permissions_Query_his_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -7055,8 +7210,8 @@ CREATE TABLE [dbo].[Post](
  CONSTRAINT [PK_Post] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Post] ADD  CONSTRAINT [DF_Post_Contents]  DEFAULT ('') FOR [Contents]
 GO
@@ -7087,8 +7242,8 @@ CREATE TABLE [dbo].[Post_his](
  CONSTRAINT [PK__Post_his__2D21E3B6934210DC] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Post_his] ADD  CONSTRAINT [DF__Post_his__SysCre__1ACAA75A]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7128,8 +7283,8 @@ CREATE TABLE [dbo].[Post_temp](
  CONSTRAINT [PK__Post_tem__06C703C18F5452D8] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Post_temp] ADD  CONSTRAINT [DF__Post_temp__SysCr__18EC8089]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7148,8 +7303,8 @@ CREATE TABLE [dbo].[Post_Views](
  CONSTRAINT [PK_Post_Views] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -7162,8 +7317,8 @@ CREATE TABLE [dbo].[PostCountryType](
  CONSTRAINT [PK_PostCountryType] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -7185,8 +7340,8 @@ CREATE TABLE [dbo].[PostCountryType_his](
  CONSTRAINT [PK__PostCoun__2D21E3B605E7C15A] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[PostCountryType_his] ADD  CONSTRAINT [DF__PostCount__SysCr__1E9B383E]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7214,8 +7369,8 @@ CREATE TABLE [dbo].[PostCountryType_temp](
  CONSTRAINT [PK__PostCoun__06C703C11BBDA5A7] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[PostCountryType_temp] ADD  CONSTRAINT [DF__PostCount__SysCr__683F278D]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7242,8 +7397,8 @@ CREATE TABLE [dbo].[PostFileMapping](
  CONSTRAINT [PK_PostFileMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -7264,8 +7419,8 @@ CREATE TABLE [dbo].[PostFileMapping_his](
  CONSTRAINT [PK__PostFile__2D21E3B6396B36C0] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[PostFileMapping_his] ADD  CONSTRAINT [DF__PostFileM__SysCr__2177A4E9]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7295,8 +7450,8 @@ CREATE TABLE [dbo].[PostFileMapping_temp](
  CONSTRAINT [PK__PostFile__06C703C1CA6F8ED9] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[PostFileMapping_temp] ADD  CONSTRAINT [DF__PostFileM__SysCr__161013DE]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7325,8 +7480,8 @@ CREATE TABLE [dbo].[ProductMaster](
  CONSTRAINT [PK_ProductMaster] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ProductMaster] ADD  CONSTRAINT [DF_ProductMaster_GroupCode]  DEFAULT ('') FOR [GroupCode]
 GO
@@ -7360,8 +7515,8 @@ CREATE TABLE [dbo].[QuickLink](
  CONSTRAINT [PK_QuickLink] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -7380,8 +7535,8 @@ CREATE TABLE [dbo].[QuotaBank_D](
  CONSTRAINT [PK_QuotaBankD] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_D] ADD  CONSTRAINT [DF_QuotaBank_D_Memo]  DEFAULT ('') FOR [Memo]
 GO
@@ -7401,8 +7556,8 @@ CREATE TABLE [dbo].[QuotaBank_D_Form_AllData](
  CONSTRAINT [PK_QuotaBank_D_Form_AllData] PRIMARY KEY CLUSTERED
 (
 	[Pk_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'暫存資料識別碼（流水號）' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'QuotaBank_D_Form_AllData', @level2type=N'COLUMN',@level2name=N'Pk_Id'
 GO
@@ -7423,8 +7578,8 @@ CREATE TABLE [dbo].[QuotaBank_D_his](
  CONSTRAINT [PK__QuotaBan__2D21E3B6A835C6F9] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_D_his] ADD  CONSTRAINT [DF__QuotaBank__SysCr__109731AA]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7453,8 +7608,8 @@ CREATE TABLE [dbo].[QuotaBank_D_temp](
  CONSTRAINT [PK__QuotaBan__06C703C10F79C68D] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_D_temp] ADD  CONSTRAINT [DF__QuotaBank___Memo__6D4DF56D]  DEFAULT ('') FOR [Memo]
 GO
@@ -7483,8 +7638,8 @@ CREATE TABLE [dbo].[QuotaBank_D_Week](
  CONSTRAINT [PK_QuotaBankD_Week] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
@@ -7495,7 +7650,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [IX_QuotaBank_D_Week] ON [dbo].[QuotaBank_D_Wee
 	[Week] ASC,
 	[CountryId] ASC,
 	[UnitCode] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[QuotaBank_D_Week] ADD  CONSTRAINT [DF_QuotaBank_D_Week_Memo]  DEFAULT ('') FOR [Memo]
 GO
@@ -7515,8 +7670,8 @@ CREATE TABLE [dbo].[QuotaBank_Form_Data](
  CONSTRAINT [PK_QuotaBank_Form_Data] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_Form_Data] ADD  CONSTRAINT [DF_QuotaBank_Form_Data_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7534,8 +7689,8 @@ CREATE TABLE [dbo].[QuotaBank_Form_ParentWeight](
  CONSTRAINT [PK_QuotaBank_Form_ParentWeight] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'暫存資料識別碼（流水號）' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'QuotaBank_Form_ParentWeight', @level2type=N'COLUMN',@level2name=N'PK_Id'
 GO
@@ -7555,8 +7710,8 @@ CREATE TABLE [dbo].[QuotaBank_M](
  CONSTRAINT [PK_QuotaBank] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_M] ADD  CONSTRAINT [DF_QuotaBank_M_TotalUtilizedAmount]  DEFAULT ((0)) FOR [TotalUtilizedAmount]
 GO
@@ -7587,8 +7742,8 @@ CREATE TABLE [dbo].[QuotaBank_M_Form_AllData](
  CONSTRAINT [PK_QuotaBank_M_Form_AllData] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_M_Form_AllData] ADD  CONSTRAINT [DF_QuotaBank_M_Form_AllData_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7617,8 +7772,8 @@ CREATE TABLE [dbo].[QuotaBank_M_his](
  CONSTRAINT [PK_QuotaBank_M_his] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_M_his] ADD  CONSTRAINT [DF_QuotaBank_M_his_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7645,8 +7800,8 @@ CREATE TABLE [dbo].[QuotaBank_M_temp](
  CONSTRAINT [PK_QuotaBank_M_temp] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_M_temp] ADD  CONSTRAINT [DF_QuotaBank_M_temp_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7674,15 +7829,15 @@ CREATE TABLE [dbo].[QuotaBank_M_Week](
  CONSTRAINT [PK_QuotaBank_M_Week] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB],
  CONSTRAINT [IX_QuotaBank_M_Week] UNIQUE NONCLUSTERED
 (
 	[Year] ASC,
 	[Month] ASC,
 	[Week] ASC,
 	[CountryId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_M_Week] ADD  CONSTRAINT [DF_QuotaBank_M_Week_TotalUtilizedAmount]  DEFAULT ((0)) FOR [TotalUtilizedAmount]
 GO
@@ -7712,8 +7867,8 @@ CREATE TABLE [dbo].[QuotaBank_Weight](
  CONSTRAINT [PK_QuotaBank_Weight] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -7727,8 +7882,8 @@ CREATE TABLE [dbo].[QuotaBank_Weight_Form_AllData](
  CONSTRAINT [PK_QuotaBank_Weight_Form_AllData] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'主表暫存資料外鍵' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'QuotaBank_Weight_Form_AllData', @level2type=N'COLUMN',@level2name=N'QuotaD_Form_AllDataId'
 GO
@@ -7748,8 +7903,8 @@ CREATE TABLE [dbo].[QuotaBank_Weight_his](
  CONSTRAINT [PK__QuotaBan__2D21E3B6A00EBB77] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_Weight_his] ADD  CONSTRAINT [DF__QuotaBank__SysCr__13739E55]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7777,8 +7932,8 @@ CREATE TABLE [dbo].[QuotaBank_Weight_temp](
  CONSTRAINT [PK__QuotaBan__06C703C1486D8CE9] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[QuotaBank_Weight_temp] ADD  CONSTRAINT [DF__QuotaBank__SysCr__73FAF2FC]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7814,8 +7969,8 @@ CREATE TABLE [dbo].[QuotaBank_Weight_Week](
  CONSTRAINT [PK_QuotaBank_Weight_Week] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
@@ -7826,7 +7981,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [IX_QuotaBank_Weight_Week] ON [dbo].[QuotaBank_
 	[Week] ASC,
 	[UnitCode] ASC,
 	[CountryWeightId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[QuotaBank_Weight_Week] ADD  CONSTRAINT [DF_QuotaBank_Weight_Week_QuotaBankDetailId]  DEFAULT ((1)) FOR [QuotaBankDetailId]
 GO
@@ -7851,15 +8006,15 @@ CREATE TABLE [dbo].[RatingRatioMaster](
  CONSTRAINT [PK__RatingMu__F4A24B2232D6980E] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_RatingRatioMaster] ON [dbo].[RatingRatioMaster]
 (
 	[Year] ASC,
 	[RatingLevel] ASC,
 	[HasFCBBranch] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[RatingRatioMaster] ADD  CONSTRAINT [DF_RatingRatioMaster_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -7887,8 +8042,8 @@ CREATE TABLE [dbo].[RatingRatioMaster_his](
  CONSTRAINT [PK__RatingRa__2D21E3B6B416E659] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[RatingRatioMaster_his] ADD  CONSTRAINT [DF__RatingRat__SysCr__076CEECC]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7922,8 +8077,8 @@ CREATE TABLE [dbo].[RatingRatioMaster_temp](
  CONSTRAINT [PK__RatingRa__06C703C1BF4C0345] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[RatingRatioMaster_temp] ADD  CONSTRAINT [DF__RatingRat__Creat__0A495B77]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -7961,8 +8116,8 @@ CREATE TABLE [dbo].[RatingRatioMaster_Week](
  CONSTRAINT [PK__RatingRatioMaster_Week__F4A24B2232D6980E] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 CREATE NONCLUSTERED INDEX [IX_RatingRatioMaster_Week] ON [dbo].[RatingRatioMaster_Week]
 (
@@ -7971,7 +8126,7 @@ CREATE NONCLUSTERED INDEX [IX_RatingRatioMaster_Week] ON [dbo].[RatingRatioMaste
 	[Week] ASC,
 	[RatingLevel] ASC,
 	[HasFCBBranch] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[RatingRatioMaster_Week] ADD  CONSTRAINT [DF_RatingRatioMaster_Week_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -7994,8 +8149,8 @@ CREATE TABLE [dbo].[RatingRatioMasterBase](
  CONSTRAINT [PK_RatingRatioMasterBase__F4A24B2232D6980E] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[RatingRatioMasterBase] ADD  CONSTRAINT [DF_RatingRatioMasterBase_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8033,8 +8188,8 @@ CREATE TABLE [dbo].[RiskLineD](
 (
 	[BranchCode] ASC,
 	[Apply_NO] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -8068,8 +8223,8 @@ CREATE TABLE [dbo].[RiskLineO](
 (
 	[BranchCode] ASC,
 	[Apply_NO] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -8089,15 +8244,15 @@ CREATE TABLE [dbo].[Role](
  CONSTRAINT [PK_ROLE] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
 CREATE NONCLUSTERED INDEX [IX_Role_FK_Unit_Code] ON [dbo].[Role]
 (
 	[FK_Unit_Code] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[Role] ADD  CONSTRAINT [DF_Role_RoleName_TN]  DEFAULT ('') FOR [RoleName_TN]
 GO
@@ -8151,8 +8306,8 @@ CREATE TABLE [dbo].[Role_his](
  CONSTRAINT [PK_Role_his] PRIMARY KEY CLUSTERED
 (
 	[log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Role_his] ADD  CONSTRAINT [DF_Role_his_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -8191,8 +8346,8 @@ CREATE TABLE [dbo].[Role_Position_Mapping](
  CONSTRAINT [PK_Title_Permissions_Mapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
@@ -8200,7 +8355,7 @@ CREATE NONCLUSTERED INDEX [IX_Role_Position_Mapping] ON [dbo].[Role_Position_Map
 (
 	[TitleCode] ASC,
 	[FK_Branch_Code] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ANSI_PADDING ON
 GO
@@ -8208,7 +8363,7 @@ CREATE NONCLUSTERED INDEX [IX_Role_Position_Mapping_1] ON [dbo].[Role_Position_M
 (
 	[TitleCode] ASC,
 	[FK_Department_Code] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[Role_Position_Mapping] ADD  CONSTRAINT [DF_Role_Position_Mapping_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8238,8 +8393,8 @@ CREATE TABLE [dbo].[Role_Position_Mapping_his](
  CONSTRAINT [PK_Role_Position_Mapping_his] PRIMARY KEY CLUSTERED
 (
 	[log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Role_Position_Mapping_his] ADD  CONSTRAINT [DF_Role_Position_Mapping_his_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8276,20 +8431,20 @@ CREATE TABLE [dbo].[Role_User_Mapping](
  CONSTRAINT [PK_USER_PERMISSIONS_MAPPING] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
 CREATE NONCLUSTERED INDEX [IX_Role_User_Mapping] ON [dbo].[Role_User_Mapping]
 (
 	[FK_User_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 CREATE NONCLUSTERED INDEX [IX_Role_User_Mapping_1] ON [dbo].[Role_User_Mapping]
 (
 	[FK_Role_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[Role_User_Mapping] ADD  CONSTRAINT [DF_USER_PERMISSIONS_MAPPING_FK_Role_Id]  DEFAULT ((0)) FOR [FK_Role_Id]
 GO
@@ -8325,8 +8480,8 @@ CREATE TABLE [dbo].[Role_User_Mapping_his](
  CONSTRAINT [PK_Role_User_Mapping_his] PRIMARY KEY CLUSTERED
 (
 	[log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Role_User_Mapping_his] ADD  CONSTRAINT [DF_User_Role_Mapping_his_FK_Role_Id]  DEFAULT ((0)) FOR [FK_Role_Id]
 GO
@@ -8369,8 +8524,8 @@ CREATE TABLE [dbo].[RPA](
  CONSTRAINT [PK_NewsPost] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[RPA] ADD  CONSTRAINT [DF_RPA_Contents]  DEFAULT ('') FOR [Contents]
 GO
@@ -8412,8 +8567,8 @@ CREATE TABLE [dbo].[RPA_his](
  CONSTRAINT [PK_RPA_his] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -8432,8 +8587,8 @@ CREATE TABLE [dbo].[RPA_Source](
  CONSTRAINT [PK_RPA_Source] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -8460,8 +8615,8 @@ CREATE TABLE [dbo].[RPA_temp](
  CONSTRAINT [PK__NewsPost__06C703C16ED4FA98] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[RPA_temp] ADD  CONSTRAINT [DF_RPA_temp_Url]  DEFAULT ('') FOR [Url]
 GO
@@ -8486,8 +8641,8 @@ CREATE TABLE [dbo].[RPA_Views](
  CONSTRAINT [PK_RPA_Views] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[RPA_Views] ADD  CONSTRAINT [DF_RPA_Views_Views]  DEFAULT ((0)) FOR [Views]
 GO
@@ -8502,8 +8657,8 @@ CREATE TABLE [dbo].[RPACountryType](
  CONSTRAINT [PK_RPACountryType] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -8525,8 +8680,8 @@ CREATE TABLE [dbo].[RPACountryType_his](
  CONSTRAINT [PK_RPACountryType_his] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -8544,8 +8699,8 @@ CREATE TABLE [dbo].[RPACountryType_temp](
  CONSTRAINT [PK__RPACount__06C703C199E83B6C] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[RPACountryType_temp] ADD  CONSTRAINT [DF__RPACountr__SysCr__6B1B9438]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -8572,8 +8727,8 @@ CREATE TABLE [dbo].[RPAFileMapping](
  CONSTRAINT [PK_RPAFileMapping] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -8594,8 +8749,8 @@ CREATE TABLE [dbo].[RPAFileMapping_his](
  CONSTRAINT [PK_RPAFileMapping_his] PRIMARY KEY CLUSTERED
 (
 	[Log_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -8615,8 +8770,8 @@ CREATE TABLE [dbo].[RPAFileMapping_temp](
  CONSTRAINT [PK__NewsPost__06C703C132452CA1] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[RPAFileMapping_temp] ADD  CONSTRAINT [DF__NewsPostF__Creat__61D155C9]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8656,8 +8811,8 @@ CREATE TABLE [dbo].[ScheduleJobs](
  CONSTRAINT [PK_ScheduleJobs] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ScheduleJobs] ADD  CONSTRAINT [DF_ScheduleJobs_Name]  DEFAULT ('') FOR [Name]
 GO
@@ -8742,8 +8897,8 @@ CREATE TABLE [dbo].[ScheduleJobs_his](
  CONSTRAINT [PK__Schedule__2D21E3B610EB64F6] PRIMARY KEY CLUSTERED
 (
 	[Log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ScheduleJobs_his] ADD  CONSTRAINT [DF__ScheduleJo__Name__53F837BE]  DEFAULT ('') FOR [Name]
 GO
@@ -8799,8 +8954,8 @@ CREATE TABLE [dbo].[ScheduleJobs_RECORD](
  CONSTRAINT [PK_ScheduleJobs_RECORD] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ScheduleJobs_RECORD] ADD  CONSTRAINT [DF_ScheduleJobs_RECORD_Name]  DEFAULT ('') FOR [Name]
 GO
@@ -8859,8 +9014,8 @@ CREATE TABLE [dbo].[ScheduleJobs_temp](
  CONSTRAINT [PK__Schedule__06C703C15BB935D9] PRIMARY KEY CLUSTERED
 (
 	[TempId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ScheduleJobs_temp] ADD  CONSTRAINT [DF__ScheduleJo__Name__44B5F42E]  DEFAULT ('') FOR [Name]
 GO
@@ -8916,8 +9071,8 @@ CREATE TABLE [dbo].[SysData](
  CONSTRAINT [PK_SysData] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
@@ -8947,8 +9102,8 @@ CREATE TABLE [dbo].[SysLog](
  CONSTRAINT [PK_sys_Log] PRIMARY KEY CLUSTERED
 (
 	[ID] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
@@ -8969,8 +9124,8 @@ CREATE TABLE [dbo].[TempModifyRecord](
  CONSTRAINT [PK_TempModifyRecord] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[TempModifyRecord] ADD  CONSTRAINT [DF_TempModifyRecord_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8989,15 +9144,15 @@ CREATE TABLE [dbo].[Title](
  CONSTRAINT [PK_Title] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
 CREATE UNIQUE NONCLUSTERED INDEX [IX_Title] ON [dbo].[Title]
 (
 	[TitleCode] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[Title] ADD  CONSTRAINT [DF_Title_seq]  DEFAULT ((1)) FOR [seq]
 GO
@@ -9009,7 +9164,7 @@ CREATE TABLE [dbo].[TitleMapping](
 	[TitleCode] [nvarchar](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[TitleId] [int] NULL,
 	[TitleName] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 SET ANSI_NULLS ON
 GO
@@ -9039,8 +9194,8 @@ CREATE TABLE [dbo].[Users](
  CONSTRAINT [PK_Users] PRIMARY KEY CLUSTERED
 (
 	[UserId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
@@ -9048,7 +9203,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [IX_Users] ON [dbo].[Users]
 (
 	[UserId] ASC,
 	[UserName] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[Users] ADD  CONSTRAINT [DF_Users_IsActive]  DEFAULT ((0)) FOR [IsActive]
 GO
@@ -9129,7 +9284,7 @@ CREATE TABLE [dbo].[Users_log](
 	[Update_User] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Memo] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SysCreateDate] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Users_log] ADD  CONSTRAINT [DF_Users_his_IsActive]  DEFAULT ((0)) FOR [IsActive]
 GO
@@ -9200,15 +9355,15 @@ CREATE TABLE [dbo].[UserTextLibrary](
  CONSTRAINT [PK_TextLibrary] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
 CREATE NONCLUSTERED INDEX [IX_UserTextLibrary] ON [dbo].[UserTextLibrary]
 (
 	[UserId] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 SET ANSI_NULLS ON
 GO
@@ -9226,15 +9381,15 @@ CREATE TABLE [dbo].[UserToken](
  CONSTRAINT [PK_UserToken] PRIMARY KEY CLUSTERED
 (
 	[PK_ID] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING ON
 GO
 CREATE UNIQUE NONCLUSTERED INDEX [IX_UserToken] ON [dbo].[UserToken]
 (
 	[Token] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 GO
 ALTER TABLE [dbo].[UserToken] ADD  CONSTRAINT [DF_UserToken_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
