@@ -1,0 +1,37 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[MailGroupMapping_temp](
+	[TempId] [int] IDENTITY(1,1) NOT NULL,
+	[FK_TempId] [int] NULL,
+	[PK_Id] [int] NULL,
+	[MailId] [int] NULL,
+	[MailGroupId] [int] NULL,
+	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[Create_date] [datetime] NULL,
+	[Create_user] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[SysCreateDate] [datetime] NOT NULL,
+	[SysCreateUser] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
+ CONSTRAINT [PK__MailGrou__06C703C1E617227D] PRIMARY KEY CLUSTERED
+(
+	[TempId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+GO
+CREATE NONCLUSTERED INDEX [IX_MailGroupMapping_temp_FK_TempId] ON [dbo].[MailGroupMapping_temp]
+(
+	[FK_TempId] ASC
+)
+INCLUDE([MailGroupId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+GO
+ALTER TABLE [dbo].[MailGroupMapping_temp] ADD  CONSTRAINT [DF__MailGroup__SysCr__2FE4F47A]  DEFAULT (getdate()) FOR [SysCreateDate]
+GO
+ALTER TABLE [dbo].[MailGroupMapping_temp]  WITH CHECK ADD  CONSTRAINT [FK_MailGroupMapping_temp_Mail_temp] FOREIGN KEY([FK_TempId])
+REFERENCES [dbo].[Mail_temp] ([TempId])
+ON DELETE CASCADE
+GO
+ALTER TABLE [dbo].[MailGroupMapping_temp] CHECK CONSTRAINT [FK_MailGroupMapping_temp_Mail_temp]
+GO
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'暫存資料識別碼（流水號）' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'MailGroupMapping_temp', @level2type=N'COLUMN',@level2name=N'TempId'
+GO

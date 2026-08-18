@@ -1,0 +1,16 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[INDUSTRY_Overseas](
+	[BranchCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
+	[CustomerId] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
+	[INDCODE] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
+	[CreateDate] [datetime] NOT NULL,
+ CONSTRAINT [PK_INDUSTRY_Overseas] PRIMARY KEY CLUSTERED
+(
+	[BranchCode] ASC,
+	[CustomerId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+GO

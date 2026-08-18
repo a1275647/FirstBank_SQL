@@ -1,0 +1,24 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[NewsCountryType](
+	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
+	[FK_CountryId] [int] NOT NULL,
+	[FK_NewsId] [int] NOT NULL,
+ CONSTRAINT [PK_NewsCountryType] PRIMARY KEY CLUSTERED
+(
+	[PK_Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+GO
+ALTER TABLE [dbo].[NewsCountryType]  WITH CHECK ADD  CONSTRAINT [FK_NewsCountryType_CountryMaster] FOREIGN KEY([FK_NewsId])
+REFERENCES [dbo].[CountryMaster] ([PK_Id])
+GO
+ALTER TABLE [dbo].[NewsCountryType] CHECK CONSTRAINT [FK_NewsCountryType_CountryMaster]
+GO
+ALTER TABLE [dbo].[NewsCountryType]  WITH CHECK ADD  CONSTRAINT [FK_NewsCountryType_News] FOREIGN KEY([FK_NewsId])
+REFERENCES [dbo].[News] ([PK_Id])
+GO
+ALTER TABLE [dbo].[NewsCountryType] CHECK CONSTRAINT [FK_NewsCountryType_News]
+GO

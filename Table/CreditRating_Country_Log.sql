@@ -1,0 +1,26 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[CreditRating_Country_Log](
+	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
+	[FK_CountryId] [int] NOT NULL,
+	[Score] [int] NOT NULL,
+	[Create_date] [datetime] NOT NULL,
+	[BusinessDate] [date] NOT NULL,
+ CONSTRAINT [PK_CreditRating_Country_Log] PRIMARY KEY CLUSTERED
+(
+	[PK_Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+ CONSTRAINT [UQ_CreditRating_Country_Log_Country_BusinessDate] UNIQUE NONCLUSTERED
+(
+	[FK_CountryId] ASC,
+	[BusinessDate] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+GO
+ALTER TABLE [dbo].[CreditRating_Country_Log]  WITH CHECK ADD  CONSTRAINT [FK_CreditRating_Country_Log_CountryMaster] FOREIGN KEY([FK_CountryId])
+REFERENCES [dbo].[CountryMaster] ([PK_Id])
+GO
+ALTER TABLE [dbo].[CreditRating_Country_Log] CHECK CONSTRAINT [FK_CreditRating_Country_Log_CountryMaster]
+GO
