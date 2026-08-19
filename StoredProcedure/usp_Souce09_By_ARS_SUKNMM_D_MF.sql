@@ -54,14 +54,14 @@ BEGIN
 			(SUKMM_MATURITY_DATE IS NULL OR SUKMM_MATURITY_DATE > SUKMM_EXT_DATE) AND -- 並去除當日到期之資料
 			TRIM(SUKMM_TRN_TYPE) IN ('1','3') AND -- 只抓取正的
 			SUKMM_COUNTRY_RISK <> 'TW' AND
-			(
-				-- 條件1：非 group_id = '99999' 的客戶
-				(TRIM(SUKMM_CUST_NAME1) NOT IN (SELECT customer_name FROM groupdata WHERE group_id = '99999'))
-				OR
-				-- 條件2：group_id = '99999' 的客戶，但排除 TWD 幣別
-				(TRIM(SUKMM_CUST_NAME1) IN (SELECT customer_name FROM groupdata WHERE group_id = '99999')
-				 AND SUKMM_CURENCY_COD <> 'TWD')
-			) AND
+			--(
+			--	-- 條件1：非 group_id = '99999' 的客戶
+			--	(TRIM(SUKMM_CUST_NAME1) NOT IN (SELECT customer_name FROM groupdata WHERE group_id = '99999'))
+			--	OR
+			--	-- 條件2：group_id = '99999' 的客戶，但排除 TWD 幣別
+			--	(TRIM(SUKMM_CUST_NAME1) IN (SELECT customer_name FROM groupdata WHERE group_id = '99999')
+			--	 AND SUKMM_CURENCY_COD <> 'TWD')
+			--) AND
 			EXISTS (
 				SELECT 1
 				FROM ARS_SUKNMM_D_MF MF2

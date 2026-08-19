@@ -1,31 +1,41 @@
 -- SSMS ready-to-run instructions:
 --   1. Connect to the intended production SQL Server.
---   2. Select Query > SQLCMD Mode.
+--   2. Open this complete file in a normal SSMS query window (SQLCMD Mode is not required).
 --   3. Press F5 without selecting only part of this file.
 -- No script edits are required. This file performs a destructive schema rebuild of database NCRMS.
-:ON ERROR EXIT
-:setvar TargetDatabase "NCRMS"
-:setvar ConfirmDestructiveRebuild "1"
-
-USE [$(TargetDatabase)];
+USE [NCRMS];
 GO
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 GO
-IF DB_NAME() <> N'$(TargetDatabase)'
-    THROW 51000, 'Target database mismatch.', 1;
-GO
-IF N'$(ConfirmDestructiveRebuild)' <> N'1'
-    THROW 51001, 'Set ConfirmDestructiveRebuild=1 only after confirming the target database can be destructively rebuilt.', 1;
-GO
-IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
-    THROW 51002, 'Required table filegroup NCRMS_TAB does not exist in the target database.', 1;
-IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
-    THROW 51003, 'Required index filegroup NCRMS_IDX does not exist in the target database.', 1;
+DECLARE @PreflightError nvarchar(2048) = NULL;
+
+IF DB_NAME() <> N'NCRMS'
+    SET @PreflightError = N'Target database mismatch. Expected NCRMS but connected to ' + QUOTENAME(DB_NAME()) + N'.';
+
+IF @PreflightError IS NULL
+BEGIN
+    IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+        PRINT N'NCRMS_TAB is unavailable; table and clustered-index DDL will use PRIMARY.';
+    ELSE
+        PRINT N'NCRMS_TAB is available; table and clustered-index DDL will use NCRMS_TAB.';
+
+    IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+        PRINT N'NCRMS_IDX is unavailable; nonclustered-index DDL will use PRIMARY.';
+    ELSE
+        PRINT N'NCRMS_IDX is available; nonclustered-index DDL will use NCRMS_IDX.';
+END;
+
+IF @PreflightError IS NOT NULL
+BEGIN
+    PRINT N'DEPLOYMENT HALTED: ' + @PreflightError;
+    SET NOEXEC ON;
+END;
 GO
 
 -- Deployment-driver permission model:
 --   * Requires DDL rights for the target database objects.
+--   * Uses NCRMS_TAB/NCRMS_IDX when present and falls back to PRIMARY when either is absent.
 --   * Does not INSERT, UPDATE, DELETE, or SELECT rows from application tables.
 --   * DML text inside procedure/trigger definitions is compiled only and is not executed here.
 -- Preconditions:
@@ -530,6 +540,8 @@ DROP VIEW IF EXISTS [dbo].[RoleUserMatch];
 GO
 DROP FUNCTION IF EXISTS [dbo].[getNUM];
 GO
+DROP TYPE IF EXISTS [dbo].[CountryRatingResultType];
+GO
 DROP TABLE IF EXISTS [dbo].[UserToken];
 GO
 DROP TABLE IF EXISTS [dbo].[UserTextLibrary];
@@ -788,8 +800,6 @@ DROP TABLE IF EXISTS [dbo].[Mail_his];
 GO
 DROP TABLE IF EXISTS [dbo].[Mail];
 GO
-DROP TABLE IF EXISTS [dbo].[m_parameter];
-GO
 DROP TABLE IF EXISTS [dbo].[LS_LSRSA_D_MF];
 GO
 DROP TABLE IF EXISTS [dbo].[LoanMainUnitData];
@@ -1012,7 +1022,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ACNOD_STG](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ACNOD_STG](
 	[ACNOD_BRANCH_CODE] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[ACNOD_CRCY_CODE] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[ACNOD_ACC5_CODE] [nvarchar](5) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -1022,11 +1034,21 @@ CREATE TABLE [dbo].[ACNOD_STG](
 	[ACNOD_EXT_DATE] [date] NULL,
 	[Create_Date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_ACNOD_STG] ON [dbo].[ACNOD_STG]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_ACNOD_STG] ON [dbo].[ACNOD_STG]
 (
 	[ACNOD_EXT_DATE] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ACNOD_STG] ADD  CONSTRAINT [DF_ACNOD_STG_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO
@@ -1050,7 +1072,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ACOLRT_STG](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ACOLRT_STG](
 	[ACOLRT_DATE] [date] NULL,
 	[ACOLRT_BRANCH] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[ACOLRT_CURENCY] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -1060,6 +1084,10 @@ CREATE TABLE [dbo].[ACOLRT_STG](
 	[ACOLRT_LOAD_DATE] [datetime] NULL,
 	[Create_Date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ACOLRT_STG] ADD  CONSTRAINT [DF_ACOLRT_STG_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO
@@ -1069,7 +1097,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ARS_SUKBDO_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ARS_SUKBDO_D_MF](
 	[SUKBDO_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKBDO_TX_DATE] [date] NULL,
 	[SUKBDO_DESK] [nvarchar](12) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -1085,6 +1115,10 @@ CREATE TABLE [dbo].[ARS_SUKBDO_D_MF](
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ARS_SUKBDO_D_MF] ADD  CONSTRAINT [DF_ARS_SUKBDO_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1118,7 +1152,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ARS_SUKFRA_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ARS_SUKFRA_D_MF](
 	[SUKFRA_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKFRA_TRADE_ID] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKFRA_SUPERVISOR] [nvarchar](12) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -1136,6 +1172,10 @@ CREATE TABLE [dbo].[ARS_SUKFRA_D_MF](
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ARS_SUKFRA_D_MF] ADD  CONSTRAINT [DF_ARS_SUKFRA_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1175,7 +1215,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ARS_SUKIRO_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ARS_SUKIRO_D_MF](
 	[SUKIRO_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKIRO_TRADE_ID] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKIRO_SUPERVISOR] [nvarchar](12) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -1191,6 +1233,10 @@ CREATE TABLE [dbo].[ARS_SUKIRO_D_MF](
 	[SUKIRO_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ARS_SUKIRO_D_MF] ADD  CONSTRAINT [DF_ARS_SUKIRO_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1228,7 +1274,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ARS_SUKMST_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ARS_SUKMST_D_MF](
 	[SUKMST_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKMST_TRAN_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKMST_SUPERVISOR] [nvarchar](12) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -1246,6 +1294,10 @@ CREATE TABLE [dbo].[ARS_SUKMST_D_MF](
 	[SUKMST_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ARS_SUKMST_D_MF] ADD  CONSTRAINT [DF_ARS_SUKMST_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1285,7 +1337,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ARS_SUKNBD1_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ARS_SUKNBD1_D_MF](
 	[SUKBD1_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKBD1_TRAN_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKBD1_TX_DATE] [date] NULL,
@@ -1305,6 +1359,10 @@ CREATE TABLE [dbo].[ARS_SUKNBD1_D_MF](
 	[SUKBD1_GU_LOG_CTY] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ARS_SUKNBD1_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNBD1_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1314,7 +1372,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ARS_SUKNFO_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ARS_SUKNFO_D_MF](
 	[SUKFO_TRADE_ID] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKFO_CPTY_NAME] [nvarchar](40) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKFO_TRADE_DATE] [date] NULL,
@@ -1334,6 +1394,10 @@ CREATE TABLE [dbo].[ARS_SUKNFO_D_MF](
 	[SUKFO_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ARS_SUKNFO_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNFO_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1343,7 +1407,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ARS_SUKNFX_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ARS_SUKNFX_D_MF](
 	[SUKFX_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKFX_TRAN_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKFX_TX_DATE] [date] NULL,
@@ -1361,6 +1427,10 @@ CREATE TABLE [dbo].[ARS_SUKNFX_D_MF](
 	[SUKFX_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ARS_SUKNFX_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNFX_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1370,7 +1440,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ARS_SUKNIRS_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ARS_SUKNIRS_D_MF](
 	[SUKIRS_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKIRS_TRAN_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKIRS_TX_DATE] [date] NULL,
@@ -1387,6 +1459,10 @@ CREATE TABLE [dbo].[ARS_SUKNIRS_D_MF](
 	[SUKIRS_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ARS_SUKNIRS_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNIRS_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1396,7 +1472,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ARS_SUKNMM_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ARS_SUKNMM_D_MF](
 	[SUKMM_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKMM_TRAN_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKMM_TX_DATE] [date] NULL,
@@ -1412,6 +1490,10 @@ CREATE TABLE [dbo].[ARS_SUKNMM_D_MF](
 	[SUKMM_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ARS_SUKNMM_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNMM_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1421,7 +1503,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ARS_SUKSWP_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ARS_SUKSWP_D_MF](
 	[SUKSWP_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKSWP_TX_DATE] [date] NULL,
 	[SUKSWP_SUPERVISOR] [nvarchar](12) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -1437,6 +1521,10 @@ CREATE TABLE [dbo].[ARS_SUKSWP_D_MF](
 	[SUKSWP_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ARS_SUKSWP_D_MF] ADD  CONSTRAINT [DF_ARS_SUKSWP_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -1446,7 +1534,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[BankBranch](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[BankBranch](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_BankUnit] [int] NULL,
 	[BankCode] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -1473,6 +1563,12 @@ CREATE TABLE [dbo].[BankBranch](
 	[BankCode] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[BankBranch] ADD  CONSTRAINT [DF_BankBranch_BankCode]  DEFAULT ('') FOR [BankCode]
 GO
@@ -1532,7 +1628,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[BankBranch_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[BankBranch_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NOT NULL,
@@ -1559,6 +1657,10 @@ CREATE TABLE [dbo].[BankBranch_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[BankBranch_his] ADD  CONSTRAINT [DF_BankBranch_his_BankCode]  DEFAULT ('') FOR [BankCode]
 GO
@@ -1620,7 +1722,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[BankBranch_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[BankBranch_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -1647,6 +1751,10 @@ CREATE TABLE [dbo].[BankBranch_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[BankBranch_temp] ADD  CONSTRAINT [DF__BankBranc__BankC__0134F289]  DEFAULT ('') FOR [BankCode]
 GO
@@ -1682,7 +1790,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[BankGroup](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[BankGroup](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[GroupCode] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[GroupName_EN] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -1711,6 +1821,12 @@ CREATE TABLE [dbo].[BankGroup](
 	[GroupCode] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[BankGroup] ADD  CONSTRAINT [DF_BankGroup_GroupCode]  DEFAULT ('') FOR [GroupCode]
 GO
@@ -1764,7 +1880,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[BankUnit](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[BankUnit](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_BankGroup] [int] NOT NULL,
 	[UnitCode] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -1792,6 +1910,12 @@ CREATE TABLE [dbo].[BankUnit](
 	[UnitCode] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[BankUnit] ADD  CONSTRAINT [DF_BankUnit_FK_BankGroup]  DEFAULT ('') FOR [FK_BankGroup]
 GO
@@ -1857,7 +1981,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[BankYearNeWorthBase](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[BankYearNeWorthBase](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Year] [int] NOT NULL,
 	[NTDToUSDEXRate] [decimal](18, 4) NOT NULL,
@@ -1882,6 +2008,12 @@ CREATE TABLE [dbo].[BankYearNeWorthBase](
 	[Year] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[BankYearNeWorthBase] ADD  CONSTRAINT [DF_BankYearNeWorthBase_Year]  DEFAULT (datepart(year,getdate())) FOR [Year]
 GO
@@ -1925,7 +2057,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[BankYearNeWorthBase_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[BankYearNeWorthBase_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NULL,
@@ -1951,6 +2085,10 @@ CREATE TABLE [dbo].[BankYearNeWorthBase_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[BankYearNeWorthBase_his] ADD  CONSTRAINT [DF__BankYearNe__Year__2B754518]  DEFAULT (datepart(year,getdate())) FOR [Year]
 GO
@@ -1980,7 +2118,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[BankYearNeWorthBase_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[BankYearNeWorthBase_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2006,6 +2146,10 @@ CREATE TABLE [dbo].[BankYearNeWorthBase_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[BankYearNeWorthBase_temp] ADD  CONSTRAINT [DF__BankYearNe__Year__21EBDADE]  DEFAULT (datepart(year,getdate())) FOR [Year]
 GO
@@ -2029,7 +2173,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[BankYearNeWorthBase_Week](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[BankYearNeWorthBase_Week](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Year] [int] NOT NULL,
 	[Month] [int] NOT NULL,
@@ -2053,13 +2199,23 @@ CREATE TABLE [dbo].[BankYearNeWorthBase_Week](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_BankYearNeWorthBase_Week] ON [dbo].[BankYearNeWorthBase_Week]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_BankYearNeWorthBase_Week] ON [dbo].[BankYearNeWorthBase_Week]
 (
 	[Year] ASC,
 	[Month] ASC,
 	[Week] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[BankYearNeWorthBase_Week] ADD  CONSTRAINT [DF_BankYearNeWorthBase_Week_Year]  DEFAULT (datepart(year,getdate())) FOR [Year]
 GO
@@ -2103,7 +2259,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CDS](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CDS](
 	[CountryCode2] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[CDS_date] [date] NOT NULL,
 	[CountryName] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2116,12 +2274,18 @@ CREATE TABLE [dbo].[CDS](
 	[CountryName] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ContinentCountry](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ContinentCountry](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[ContinentId] [int] NOT NULL,
 	[CountryId] [int] NOT NULL,
@@ -2132,12 +2296,22 @@ CREATE TABLE [dbo].[ContinentCountry](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_ContinentCountry] ON [dbo].[ContinentCountry]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_ContinentCountry] ON [dbo].[ContinentCountry]
 (
 	[ContinentId] ASC,
 	[CountryId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ContinentCountry] ADD  CONSTRAINT [DF_CONTINENTCOUNTRY_CONTINENTCODE]  DEFAULT ('') FOR [ContinentId]
 GO
@@ -2159,7 +2333,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ContinentCountry_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ContinentCountry_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -2175,6 +2351,10 @@ CREATE TABLE [dbo].[ContinentCountry_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ContinentCountry_his] ADD  CONSTRAINT [DF__Continent__SysCr__19C0A931]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -2190,7 +2370,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ContinentCountry_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ContinentCountry_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2206,6 +2388,10 @@ CREATE TABLE [dbo].[ContinentCountry_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ContinentCountry_temp] ADD  CONSTRAINT [DF__Continent__Conti__1C9D15DC]  DEFAULT ('') FOR [ContinentId]
 GO
@@ -2231,7 +2417,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ContinentMaster](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ContinentMaster](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[ContinentCode] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[ContinentName_TN] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2250,6 +2438,10 @@ CREATE TABLE [dbo].[ContinentMaster](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ContinentMaster] ADD  CONSTRAINT [DF_ContinentMaster_ContinentCode]  DEFAULT ('') FOR [ContinentCode]
 GO
@@ -2303,7 +2495,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ContinentMaster_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ContinentMaster_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NULL,
@@ -2327,6 +2521,10 @@ CREATE TABLE [dbo].[ContinentMaster_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ContinentMaster_his] ADD  CONSTRAINT [DF__Continent__Conti__0A7E65A1]  DEFAULT ('') FOR [ContinentCode]
 GO
@@ -2368,7 +2566,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ContinentMaster_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ContinentMaster_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2392,6 +2592,10 @@ CREATE TABLE [dbo].[ContinentMaster_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ContinentMaster_temp] ADD  CONSTRAINT [DF__Continent__Conti__7B3C2211]  DEFAULT ('') FOR [ContinentCode]
 GO
@@ -2427,7 +2631,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryException](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryException](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_CountryId] [int] NOT NULL,
 	[IsException] [bit] NOT NULL,
@@ -2442,6 +2648,10 @@ CREATE TABLE [dbo].[CountryException](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryException] ADD  CONSTRAINT [DF_CountryException_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -2451,7 +2661,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryException_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryException_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2476,6 +2688,10 @@ CREATE TABLE [dbo].[CountryException_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryException_his] ADD  CONSTRAINT [DF_CountryException_his_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -2487,7 +2703,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryException_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryException_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2503,6 +2721,10 @@ CREATE TABLE [dbo].[CountryException_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryException_temp] ADD  CONSTRAINT [DF_CountryException_temp_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -2510,7 +2732,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryExceptionBankGroup](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryExceptionBankGroup](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_CountryExceptionId] [int] NOT NULL,
 	[FK_BankGroupCode] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2522,6 +2746,10 @@ CREATE TABLE [dbo].[CountryExceptionBankGroup](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'授信業務' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'CountryExceptionBankGroup', @level2type=N'COLUMN',@level2name=N'CreditBusiness'
 GO
@@ -2533,7 +2761,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryExceptionBankGroup_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryExceptionBankGroup_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Fk_LogId] [int] NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -2550,6 +2780,10 @@ CREATE TABLE [dbo].[CountryExceptionBankGroup_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryExceptionBankGroup_his] ADD  CONSTRAINT [DF_CountryExceptionBankGroup_his_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -2563,7 +2797,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryExceptionBankGroup_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryExceptionBankGroup_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2580,6 +2816,10 @@ CREATE TABLE [dbo].[CountryExceptionBankGroup_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryExceptionBankGroup_temp] ADD  CONSTRAINT [DF_CountryExceptionBankGroup_temp_CreditBusiness]  DEFAULT ((0)) FOR [CreditBusiness]
 GO
@@ -2599,7 +2839,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryFocus](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryFocus](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_CountryId] [int] NOT NULL,
 	[IsFocus] [bit] NOT NULL,
@@ -2614,12 +2856,18 @@ CREATE TABLE [dbo].[CountryFocus](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryFocus_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryFocus_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -2644,6 +2892,10 @@ CREATE TABLE [dbo].[CountryFocus_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryFocus_his] ADD  CONSTRAINT [DF_CountryFocus_his_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -2653,7 +2905,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryFocus_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryFocus_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2673,6 +2927,10 @@ CREATE TABLE [dbo].[CountryFocus_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryFocus_temp] ADD  CONSTRAINT [DF_CountryFocus_temp_Completion_date]  DEFAULT (getdate()) FOR [Approval_date]
 GO
@@ -2680,7 +2938,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryForexRateMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryForexRateMapping](
 	[CountryCode2] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[ForexRateCode] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Create_date] [datetime] NOT NULL,
@@ -2690,12 +2950,18 @@ CREATE TABLE [dbo].[CountryForexRateMapping](
 	[ForexRateCode] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryMaster](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryMaster](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Continent] [int] NOT NULL,
 	[CountryCode2] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2728,8 +2994,15 @@ CREATE TABLE [dbo].[CountryMaster](
  CONSTRAINT [IX_CountryMaster_1] UNIQUE NONCLUSTERED
 (
 	[CountryCode2] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+)WITH (PAD_INDEX = OFF';
+SET @FilegroupSql += N', STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryMaster] ADD  CONSTRAINT [DF_CountryMaster_CountryCode2]  DEFAULT ('') FOR [CountryCode2]
 GO
@@ -2821,7 +3094,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryMaster_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryMaster_his](
 	[log_id] [int] IDENTITY(1,1) NOT NULL,
 	[Logtype] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NOT NULL,
@@ -2853,8 +3128,13 @@ CREATE TABLE [dbo].[CountryMaster_his](
  CONSTRAINT [PK__CountryM__9E2397E0E71DF61A] PRIMARY KEY CLUSTERED
 (
 	[log_id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON';
+SET @FilegroupSql += N', ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryMaster_his] ADD  CONSTRAINT [DF_CountryMaster_his_ExceptionExplain]  DEFAULT ('') FOR [ExceptionExplain]
 GO
@@ -2878,7 +3158,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryMaster_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryMaster_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -2911,7 +3193,12 @@ CREATE TABLE [dbo].[CountryMaster_temp](
 (
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
-) ON [NCRMS_TAB]
+';
+SET @FilegroupSql += N') ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryMaster_temp] ADD  CONSTRAINT [DF_CountryMaster_temp_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -2927,7 +3214,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryOutlookReport](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryOutlookReport](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_CountryId] [int] NOT NULL,
 	[Gdp] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -2958,12 +3247,17 @@ CREATE TABLE [dbo].[CountryOutlookReport](
 	[LastYearLowCDS_date] [date] NULL,
 	[LastYearAvgCDS] [decimal](18, 2) NULL,
 	[FK_FileId] [int] NULL,
-	[GdpGrowth] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[GdpGrowth] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_';
+SET @FilegroupSql += N'CI_AS NULL,
  CONSTRAINT [PK_CountryOutlookReport] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryOutlookReport] ADD  CONSTRAINT [DF_CountryOutlookReport_IsActive]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -2975,7 +3269,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryOutlookReport_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryOutlookReport_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NULL,
@@ -3005,7 +3301,8 @@ CREATE TABLE [dbo].[CountryOutlookReport_his](
 	[Create_date] [datetime] NOT NULL,
 	[SysCreateDate] [datetime] NOT NULL,
 	[SysCreateUser] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[LastYearHighCDS] [decimal](18, 2) NULL,
+	[LastYearHighCDS] [decimal](18, 2) N';
+SET @FilegroupSql += N'ULL,
 	[LastYearHighCDS_date] [date] NULL,
 	[LastYearLowCDS] [decimal](18, 2) NULL,
 	[LastYearLowCDS_date] [date] NULL,
@@ -3016,6 +3313,10 @@ CREATE TABLE [dbo].[CountryOutlookReport_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryOutlookReport_his] ADD  CONSTRAINT [DF__CountryOu__IsAct__6715F92A]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -3039,7 +3340,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryOutlookReport_Source](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryOutlookReport_Source](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_CountryId] [int] NOT NULL,
 	[IndustryDistribution] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -3057,6 +3360,10 @@ CREATE TABLE [dbo].[CountryOutlookReport_Source](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryOutlookReport_Source] ADD  CONSTRAINT [DF_CountryOutlookReport_Source_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3064,7 +3371,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryOutlookReport_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryOutlookReport_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -3094,7 +3403,8 @@ CREATE TABLE [dbo].[CountryOutlookReport_temp](
 	[Create_date] [datetime] NOT NULL,
 	[SysCreateDate] [datetime] NOT NULL,
 	[SysCreateUser] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[LastYearHighCDS] [decimal](18, 2) NULL,
+	[LastYearHighCDS] [decimal](18, ';
+SET @FilegroupSql += N'2) NULL,
 	[LastYearHighCDS_date] [date] NULL,
 	[LastYearLowCDS] [decimal](18, 2) NULL,
 	[LastYearLowCDS_date] [date] NULL,
@@ -3105,6 +3415,10 @@ CREATE TABLE [dbo].[CountryOutlookReport_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryOutlookReport_temp] ADD  CONSTRAINT [DF__CountryOu__IsAct__6068FB9B]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -3122,7 +3436,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryOutlookReport_Views](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryOutlookReport_Views](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_ReportId] [int] NOT NULL,
 	[Views] [int] NOT NULL,
@@ -3131,6 +3447,10 @@ CREATE TABLE [dbo].[CountryOutlookReport_Views](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryOutlookReport_Views] ADD  CONSTRAINT [DF_CountryOutlookReport_Views_Views]  DEFAULT ((0)) FOR [Views]
 GO
@@ -3138,7 +3458,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CountryWeightPercent](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CountryWeightPercent](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[CountryId] [int] NOT NULL,
 	[WeightPercent] [int] NOT NULL,
@@ -3150,12 +3472,22 @@ CREATE TABLE [dbo].[CountryWeightPercent](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_CountryWeightPercent] ON [dbo].[CountryWeightPercent]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_CountryWeightPercent] ON [dbo].[CountryWeightPercent]
 (
 	[CountryId] ASC,
 	[WeightPercent] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CountryWeightPercent] ADD  CONSTRAINT [DF_CountryWeightPercent_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3163,7 +3495,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_AllBmi](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_AllBmi](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Year] [int] NOT NULL,
 	[FK_Country_Id] [int] NOT NULL,
@@ -3176,14 +3510,24 @@ CREATE TABLE [dbo].[CreditRating_AllBmi](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_CreditRating_AllBmi_Country_Year_Category] ON [dbo].[CreditRating_AllBmi]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_CreditRating_AllBmi_Country_Year_Category] ON [dbo].[CreditRating_AllBmi]
 (
 	[FK_Country_Id] ASC,
 	[Year] ASC,
 	[FK_CategoriesId] ASC
 )
 INCLUDE([Score]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_AllBmi] ADD  CONSTRAINT [DF_BMICountryRisk_temp_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3191,7 +3535,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_Bmi](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_Bmi](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Country_Id] [int] NOT NULL,
 	[Year] [int] NULL,
@@ -3227,7 +3573,8 @@ CREATE TABLE [dbo].[CreditRating_Bmi](
 	[BMI_DEBT_EXT_SERV_GCU] [decimal](38, 4) NULL,
 	[BMI_INDEX_POLRISK_UNIT_50046_E] [decimal](18, 4) NULL,
 	[BMI_INDEX_POLRISK_SECURITY_UNIT_10012_E] [decimal](18, 4) NULL,
-	[Update_date] [datetime] NOT NULL,
+	[Update_date] [datetime] NOT NULL';
+SET @FilegroupSql += N',
 	[Update_user] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL,
 	[Create_user] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -3236,13 +3583,23 @@ CREATE TABLE [dbo].[CreditRating_Bmi](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_Bmi_CountryYear] ON [dbo].[CreditRating_Bmi]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Bmi_CountryYear] ON [dbo].[CreditRating_Bmi]
 (
 	[FK_Country_Id] ASC,
 	[Year] ASC
 )
 INCLUDE([BMI_GDP_NOM_USD_AVE],[BMI_GDP_REAL_PCTCH],[BMI_INFLATION_CPI_AVE_UNIT],[BMI_LABOUR_UNEMP_PCT_AVE_UNIT],[BMI_RESERVES_IMPCOVER],[BMI_DEBT_EXT_PCGDP],[BMI_DEBT_EXT_ST_PCTEXTDEBT],[BMI_FISCAL_BALANCE_PCTGDP],[BMI_DEBT_GOVT_PCGDP],[BMI_INDEX_POLRISK_UNIT_50046_E],[BMI_INDEX_POLRISK_SECURITY_UNIT_10012_E]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_Bmi] ADD  CONSTRAINT [DF_BMICountryRisk_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -3254,7 +3611,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_BmiRule](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_BmiRule](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[RuleName] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[DisplayName] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -3276,16 +3635,26 @@ CREATE TABLE [dbo].[CreditRating_BmiRule](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_BmiRule_RuleName_Active] ON [dbo].[CreditRating_BmiRule]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_BmiRule_RuleName_Active] ON [dbo].[CreditRating_BmiRule]
 (
 	[RuleName] ASC,
 	[IsActive] ASC,
 	[ScoreLevel] ASC
 )
 INCLUDE([MinValue],[MaxValue],[Score]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_BmiRule] ADD  CONSTRAINT [DF__CreditRat__IsDis__33E06DE7]  DEFAULT ((1)) FOR [IsDisplay]
 GO
@@ -3293,7 +3662,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_CountApi](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_CountApi](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_RatingAgency_Id] [int] NOT NULL,
 	[CreditRatingType] [int] NOT NULL,
@@ -3305,12 +3676,22 @@ CREATE TABLE [dbo].[CreditRating_CountApi](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_CreditRating_CountApi_Agency_Type] ON [dbo].[CreditRating_CountApi]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_CreditRating_CountApi_Agency_Type] ON [dbo].[CreditRating_CountApi]
 (
 	[FK_RatingAgency_Id] ASC,
 	[CreditRatingType] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_CountApi] ADD  CONSTRAINT [DF_CreditRating_CountApi_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3318,7 +3699,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_CountBmi](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_CountBmi](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Country_Id] [int] NULL,
 	[CountryName] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -3358,19 +3741,26 @@ CREATE TABLE [dbo].[CreditRating_CountBmi](
 	[Outlook] [int] NULL,
 	[Other_Explain] [nvarchar](500) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Other] [decimal](5, 1) NULL,
-	[End_Explain] [nvarchar](500) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[End_Explain] [nvarchar](500) C';
+SET @FilegroupSql += N'OLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[AssessmentDay] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
  CONSTRAINT [PK_TotalCountryRating] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_Country](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_Country](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Country_Id] [int] NOT NULL,
 	[FK_RatingAgency_Id] [int] NOT NULL,
@@ -3393,14 +3783,26 @@ CREATE TABLE [dbo].[CreditRating_Country](
 	[FK_RatingAgency_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_CreditRating_Country_Lookup] ON [dbo].[CreditRating_Country]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_CreditRating_Country_Lookup] ON [dbo].[CreditRating_Country]
 (
 	[FK_Country_Id] ASC,
 	[FK_RatingAgency_Id] ASC,
 	[date] ASC
 )
 INCLUDE([AgencyRating],[RatingOutlook],[RatingOutlookDate],[RatingDate],[Create_date]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_Country] ADD  CONSTRAINT [DF_CountryCreditRating_his_AgencyRating]  DEFAULT ('') FOR [AgencyRating]
 GO
@@ -3436,7 +3838,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_Country_Current](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_Country_Current](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Country_Id] [int] NOT NULL,
 	[FK_RatingAgency_Id] [int] NOT NULL,
@@ -3459,12 +3863,20 @@ CREATE TABLE [dbo].[CreditRating_Country_Current](
 	[FK_Country_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_Country_Log](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_Country_Log](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_CountryId] [int] NOT NULL,
 	[Score] [int] NOT NULL,
@@ -3480,12 +3892,20 @@ CREATE TABLE [dbo].[CreditRating_Country_Log](
 	[BusinessDate] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_Country_Log_Detail](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_Country_Log_Detail](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Country_Id] [int] NOT NULL,
 	[FK_RatingAgency_Id] [int] NOT NULL,
@@ -3508,12 +3928,20 @@ CREATE TABLE [dbo].[CreditRating_Country_Log_Detail](
 	[BusinessDate] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_Country_M](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_Country_M](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_CountryId] [int] NOT NULL,
 	[Score] [int] NOT NULL,
@@ -3523,13 +3951,23 @@ CREATE TABLE [dbo].[CreditRating_Country_M](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_CreditRating_Country_M_Country_CreateDate] ON [dbo].[CreditRating_Country_M]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_CreditRating_Country_M_Country_CreateDate] ON [dbo].[CreditRating_Country_M]
 (
 	[FK_CountryId] ASC,
 	[Create_date] DESC
 )
 INCLUDE([Score]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_Country_M] ADD  CONSTRAINT [DF_CreditRating_Country_M_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3537,7 +3975,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_CountryId](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_CountryId](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_AgencyCode_Id] [int] NOT NULL,
 	[FK_Country_Id] [int] NOT NULL,
@@ -3552,13 +3992,23 @@ CREATE TABLE [dbo].[CreditRating_CountryId](
 	[FK_Country_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_CreditRating_CountryId_Agency_Country] ON [dbo].[CreditRating_CountryId]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_CreditRating_CountryId_Agency_Country] ON [dbo].[CreditRating_CountryId]
 (
 	[FK_AgencyCode_Id] ASC,
 	[FK_Country_Id] ASC
 )
 INCLUDE([EntityId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_CountryId] ADD  CONSTRAINT [DF_CountryCreditIdList_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3586,7 +4036,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_ErrorCountry](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_ErrorCountry](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Type] [int] NOT NULL,
 	[FK_RatingAgency_Id] [int] NOT NULL,
@@ -3599,6 +4051,10 @@ CREATE TABLE [dbo].[CreditRating_ErrorCountry](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_ErrorCountry] ADD  CONSTRAINT [DF_CreditRating_ErrorCountry_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3608,7 +4064,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_ErrorISIN](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_ErrorISIN](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Type] [int] NOT NULL,
 	[FK_RatingAgency_Id] [int] NOT NULL,
@@ -3621,6 +4079,10 @@ CREATE TABLE [dbo].[CreditRating_ErrorISIN](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_ErrorISIN] ADD  CONSTRAINT [DF_CreditRating_ErrorISIN_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3630,7 +4092,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_ErrorLEI](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_ErrorLEI](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Type] [int] NOT NULL,
 	[FK_RatingAgency_Id] [int] NOT NULL,
@@ -3643,6 +4107,10 @@ CREATE TABLE [dbo].[CreditRating_ErrorLEI](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_ErrorLEI] ADD  CONSTRAINT [DF_CreditRating_ErrorLEI_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3652,7 +4120,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_LEI](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_LEI](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[CustomerId] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[MoodyLong] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -3671,6 +4141,10 @@ CREATE TABLE [dbo].[CreditRating_LEI](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_LEI] ADD  CONSTRAINT [DF_CreditRating_LEI_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3678,7 +4152,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_ScoreMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_ScoreMapping](
 	[PK_ID] [int] IDENTITY(1,1) NOT NULL,
 	[FK_RatingAgencyID] [int] NOT NULL,
 	[AgencyRating] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -3692,6 +4168,10 @@ CREATE TABLE [dbo].[CreditRating_ScoreMapping](
 	[PK_ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_ScoreMapping] ADD  CONSTRAINT [DF_RatingScoreMapping_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -3701,7 +4181,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_ScoreMapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_ScoreMapping_his](
 	[log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NULL,
@@ -3720,6 +4202,10 @@ CREATE TABLE [dbo].[CreditRating_ScoreMapping_his](
 	[log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_ScoreMapping_his] ADD  CONSTRAINT [DF_RatingScoreMapping_his_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -3735,7 +4221,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_ScoreMapping_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_ScoreMapping_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[TempType] [int] NOT NULL,
 	[FlowFormId] [int] NULL,
@@ -3755,6 +4243,10 @@ CREATE TABLE [dbo].[CreditRating_ScoreMapping_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_ScoreMapping_temp] ADD  CONSTRAINT [DF_RatingScoreMapping_temp_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -3772,7 +4264,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_Token](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_Token](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Token] [nvarchar](2000) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Type] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -3782,6 +4276,10 @@ CREATE TABLE [dbo].[CreditRating_Token](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_Token] ADD  CONSTRAINT [DF_CreditRatingsToken_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -3789,7 +4287,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRatingMaster](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRatingMaster](
 	[PK_ID] [int] IDENTITY(1,1) NOT NULL,
 	[AgencyCode] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[AgencyName] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -3802,6 +4302,10 @@ CREATE TABLE [dbo].[CreditRatingMaster](
 	[PK_ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRatingMaster] ADD  CONSTRAINT [DF_RatingAgencyMaster_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -3811,7 +4315,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Customer](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Customer](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[GroupId] [int] NULL,
 	[CustomerName] [nvarchar](500) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -3834,63 +4340,109 @@ CREATE TABLE [dbo].[Customer](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Customer_CustomerMark_Match] ON [dbo].[Customer]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Customer_CustomerMark_Match] ON [dbo].[Customer]
 (
 	[GroupId] ASC,
 	[CustomerMark] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_Customer_GroupId] ON [dbo].[Customer]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Customer_GroupId] ON [dbo].[Customer]
 (
 	[GroupId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Customer_ISIN] ON [dbo].[Customer]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Customer_ISIN] ON [dbo].[Customer]
 (
 	[ISIN] ASC
 )
 INCLUDE([GroupId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Customer_ISIN_Match] ON [dbo].[Customer]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Customer_ISIN_Match] ON [dbo].[Customer]
 (
 	[ISIN] ASC
 )
 INCLUDE([GroupId])
-WHERE ([ISIN] IS NOT NULL AND [ISIN]<>'')
+WHERE ([ISIN] IS NOT NULL AND [ISIN]<>'''')
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Customer_LEI] ON [dbo].[Customer]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Customer_LEI] ON [dbo].[Customer]
 (
 	[LEI] ASC
 )
 INCLUDE([GroupId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Customer_LEI_Match] ON [dbo].[Customer]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Customer_LEI_Match] ON [dbo].[Customer]
 (
 	[LEI] ASC
 )
 INCLUDE([GroupId])
-WHERE ([LEI] IS NOT NULL AND [LEI]<>'')
+WHERE ([LEI] IS NOT NULL AND [LEI]<>'''')
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Customer_SwiftCode] ON [dbo].[Customer]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Customer_SwiftCode] ON [dbo].[Customer]
 (
 	[SwiftCode] ASC
 )
 INCLUDE([GroupId]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ARITHABORT ON
 SET CONCAT_NULL_YIELDS_NULL ON
@@ -3900,22 +4452,34 @@ SET ANSI_PADDING ON
 SET ANSI_WARNINGS ON
 SET NUMERIC_ROUNDABORT OFF
 GO
-CREATE NONCLUSTERED INDEX [IX_Customer_SwiftCode4_Match] ON [dbo].[Customer]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Customer_SwiftCode4_Match] ON [dbo].[Customer]
 (
 	[SwiftCode4] ASC
 )
 INCLUDE([GroupId])
-WHERE ([SwiftCode] IS NOT NULL AND [SwiftCode]<>'')
+WHERE ([SwiftCode] IS NOT NULL AND [SwiftCode]<>'''')
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [UX_Customer_Name_Unit] ON [dbo].[Customer]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE UNIQUE NONCLUSTERED INDEX [UX_Customer_Name_Unit] ON [dbo].[Customer]
 (
 	[CustomerName] ASC,
 	[Unit] ASC,
 	[CustomerId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Customer] ADD  CONSTRAINT [DF_Customer_IsSystem]  DEFAULT ((1)) FOR [IsSystem]
 GO
@@ -3947,7 +4511,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Customer_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Customer_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NOT NULL,
@@ -3974,6 +4540,10 @@ CREATE TABLE [dbo].[Customer_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Customer_his] ADD  CONSTRAINT [DF__Customer___SysCr__25083EAB]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -3983,7 +4553,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Customer_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Customer_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -4010,6 +4582,10 @@ CREATE TABLE [dbo].[Customer_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Customer_temp] ADD  CONSTRAINT [DF__Customer___IsSys__1B7ED471]  DEFAULT ((1)) FOR [IsSystem]
 GO
@@ -4035,7 +4611,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[DAILY_CIF_TMP](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[DAILY_CIF_TMP](
 	[CIF_ID_NO] [char](11) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[CIF_CUST_NAME] [char](40) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[CIF_NATION_CODE] [char](4) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -4047,6 +4625,10 @@ CREATE TABLE [dbo].[DAILY_CIF_TMP](
 	[CIF_ID_NO] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
@@ -4054,7 +4636,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ExcelTemplate](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ExcelTemplate](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Excel_Template_Code] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Excel_Sheet_Name] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -4072,15 +4656,25 @@ CREATE TABLE [dbo].[ExcelTemplate](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_ExcelTemplate] ON [dbo].[ExcelTemplate]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_ExcelTemplate] ON [dbo].[ExcelTemplate]
 (
 	[Excel_Template_Code] ASC,
 	[Excel_Template_Filename] ASC,
 	[Excel_Sheet_Name] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ExcelTemplate] ADD  CONSTRAINT [DF_ExcelTemplate_Excel_Template_Code]  DEFAULT ('') FOR [Excel_Template_Code]
 GO
@@ -4124,7 +4718,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FeatureDetail](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FeatureDetail](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[MenuId] [int] NULL,
 	[Feature_Describe] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -4138,6 +4734,10 @@ CREATE TABLE [dbo].[FeatureDetail](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FeatureDetail] ADD  CONSTRAINT [DF_FEATURE_Feature_Describe]  DEFAULT ('') FOR [Feature_Describe]
 GO
@@ -4157,7 +4757,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FileCenter](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FileCenter](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[File_Type] [int] NOT NULL,
 	[FilePath] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -4173,6 +4775,10 @@ CREATE TABLE [dbo].[FileCenter](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FileCenter] ADD  CONSTRAINT [DF_FileCenter_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -4204,7 +4810,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FileCenter_Downloads](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FileCenter_Downloads](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_FileId] [int] NOT NULL,
 	[Downloads] [int] NOT NULL,
@@ -4213,6 +4821,10 @@ CREATE TABLE [dbo].[FileCenter_Downloads](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FileCenter_Downloads] ADD  CONSTRAINT [DF_FileCenter_Downloads_Downloads]  DEFAULT ((0)) FOR [Downloads]
 GO
@@ -4220,7 +4832,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FinancialProductMaster](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FinancialProductMaster](
 	[PK_ID] [int] IDENTITY(1,1) NOT NULL,
 	[FK_GlobalID_FinancialProductCategory] [int] NOT NULL,
 	[ProductTypeName] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -4235,6 +4849,10 @@ CREATE TABLE [dbo].[FinancialProductMaster](
 	[PK_ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FinancialProductMaster] ADD  CONSTRAINT [DF_FinancialProductMaster_IsActive]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -4266,7 +4884,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FinancialProductMaster_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FinancialProductMaster_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NOT NULL,
@@ -4286,6 +4906,10 @@ CREATE TABLE [dbo].[FinancialProductMaster_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FinancialProductMaster_his] ADD  CONSTRAINT [DF__Financial__SysCr__2CD37DA5]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -4295,7 +4919,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FinancialProductMaster_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FinancialProductMaster_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -4315,6 +4941,10 @@ CREATE TABLE [dbo].[FinancialProductMaster_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FinancialProductMaster_temp] ADD  CONSTRAINT [DF__Financial__IsAct__2FAFEA50]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -4336,7 +4966,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FinancialRiskFactorData](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FinancialRiskFactorData](
 	[PK_ID] [int] IDENTITY(1,1) NOT NULL,
 	[FK_ProductID] [int] NOT NULL,
 	[FK_PeriodID] [int] NOT NULL,
@@ -4351,6 +4983,10 @@ CREATE TABLE [dbo].[FinancialRiskFactorData](
 	[PK_ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorData] ADD  CONSTRAINT [DF_FinancialRiskFactorData_Create_Date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -4360,7 +4996,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FinancialRiskFactorData_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FinancialRiskFactorData_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -4380,6 +5018,10 @@ CREATE TABLE [dbo].[FinancialRiskFactorData_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorData_his] ADD  CONSTRAINT [DF__Financial__SysCr__38453051]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -4395,7 +5037,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FinancialRiskFactorData_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FinancialRiskFactorData_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -4415,6 +5059,10 @@ CREATE TABLE [dbo].[FinancialRiskFactorData_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorData_temp] ADD  CONSTRAINT [DF__Financial__Creat__3B219CFC]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -4436,7 +5084,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay](
 	[PK_ID] [int] IDENTITY(1,1) NOT NULL,
 	[PeriodName] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[MinDays] [int] NOT NULL,
@@ -4452,6 +5102,10 @@ CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay](
 	[PK_ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorPeriodDay] ADD  CONSTRAINT [DF_FinancialRiskFactorPeriodDay_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO
@@ -4461,7 +5115,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -4482,6 +5138,10 @@ CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorPeriodDay_his] ADD  CONSTRAINT [DF__Financial__SysCr__44AB0736]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -4497,7 +5157,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -4518,6 +5180,10 @@ CREATE TABLE [dbo].[FinancialRiskFactorPeriodDay_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FinancialRiskFactorPeriodDay_temp] ADD  CONSTRAINT [DF__Financial__Creat__3FE65219]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -4539,7 +5205,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FL_FLMST_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FL_FLMST_D_MF](
 	[FLMST_CUST_ID] [nvarchar](11) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[FLMST_LC_NO] [nvarchar](11) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[FLMST_DATA_TYPE] [nvarchar](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -4560,6 +5228,10 @@ CREATE TABLE [dbo].[FL_FLMST_D_MF](
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_Date] [date] NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FL_FLMST_D_MF] ADD  CONSTRAINT [DF_FL_FLMST_D_MF_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO
@@ -4616,7 +5288,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[Flow](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Flow](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Menu_ID] [int] NOT NULL,
 	[Name_TN] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -4634,6 +5308,10 @@ CREATE TABLE [dbo].[Flow](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
@@ -4649,7 +5327,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[FlowDetail](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FlowDetail](
 	[PK_Id] [uniqueidentifier] NOT NULL,
 	[FK_Flow_Id] [int] NOT NULL,
 	[TitleId] [int] NULL,
@@ -4669,6 +5349,10 @@ CREATE TABLE [dbo].[FlowDetail](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
@@ -4680,7 +5364,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FlowFileMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FlowFileMapping](
 	[PK_ID] [int] IDENTITY(1,1) NOT NULL,
 	[FlowRecordId] [int] NOT NULL,
 	[FileCenterId] [int] NOT NULL,
@@ -4690,6 +5376,10 @@ CREATE TABLE [dbo].[FlowFileMapping](
 	[PK_ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FlowFileMapping] ADD  CONSTRAINT [DF_FlowFileMapping_IsActive]  DEFAULT ((1)) FOR [IsActive]
 GO
@@ -4697,7 +5387,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FlowForm](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FlowForm](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[ParentId] [int] NULL,
 	[RootFlowFormId] [int] NULL,
@@ -4728,8 +5420,13 @@ CREATE TABLE [dbo].[FlowForm](
  CONSTRAINT [PK__FLOW_FOR__F4A24BC2CE3A3F8B] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PA';
+SET @FilegroupSql += N'GE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FlowForm] ADD  CONSTRAINT [DF_FlowForm_ApplicantGroupCode]  DEFAULT ('') FOR [ApplicantGroupCode]
 GO
@@ -4753,7 +5450,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FlowForm_LoanMain](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FlowForm_LoanMain](
 	[FlowFormId] [int] NOT NULL,
 	[LoanCountryId] [int] NOT NULL,
 	[LoanMethodType] [int] NOT NULL,
@@ -4777,6 +5476,10 @@ CREATE TABLE [dbo].[FlowForm_LoanMain](
 	[FlowFormId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FlowForm_LoanMain] ADD  CONSTRAINT [DF__FlowForm___LoanM__46741F6E]  DEFAULT ((0)) FOR [LoanMethodType]
 GO
@@ -4788,7 +5491,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FlowModifyRecord](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FlowModifyRecord](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FormId] [int] NOT NULL,
 	[StepId] [uniqueidentifier] NOT NULL,
@@ -4802,6 +5507,10 @@ CREATE TABLE [dbo].[FlowModifyRecord](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FlowModifyRecord] ADD  CONSTRAINT [DF_FlowModifyRecord_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -4809,7 +5518,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FlowRecord](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FlowRecord](
 	[PK_id] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NOT NULL,
 	[FlowDetailId] [uniqueidentifier] NOT NULL,
@@ -4830,6 +5541,10 @@ CREATE TABLE [dbo].[FlowRecord](
 	[PK_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FlowRecord] ADD  CONSTRAINT [DF_FlowRecord_OriginHandler]  DEFAULT ('') FOR [OriginHandler]
 GO
@@ -4847,7 +5562,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FlowUserReset](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FlowUserReset](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FlowId] [int] NOT NULL,
 	[WarningType] [int] NOT NULL,
@@ -4861,12 +5578,18 @@ CREATE TABLE [dbo].[FlowUserReset](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FM_FMLINE_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FM_FMLINE_D_MF](
 	[FMLINE_CUST_ID] [nvarchar](11) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[FMLINE_DATE_TYPE] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[FMLINE_BRANCH] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -4883,6 +5606,10 @@ CREATE TABLE [dbo].[FM_FMLINE_D_MF](
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_Date] [date] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[FM_FMLINE_D_MF] ADD  CONSTRAINT [DF_FM_FMLINE_D_MF_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO
@@ -4890,7 +5617,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ForexRate](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ForexRate](
 	[ForexRateCode] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[ForexRateDate] [date] NOT NULL,
 	[CURNCY_Code] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -4903,12 +5632,18 @@ CREATE TABLE [dbo].[ForexRate](
 	[ForexRateDate] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[FPEXR_STG](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[FPEXR_STG](
 	[FPEXR_CRCY_CODE] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FPEXR_DATE] [date] NOT NULL,
 	[FPEXR_RATE] [decimal](17, 10) NULL,
@@ -4922,6 +5657,10 @@ CREATE TABLE [dbo].[FPEXR_STG](
 	[FPEXR_DATE] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
@@ -4929,7 +5668,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[Global](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Global](
 	[Id] [int] IDENTITY(1,1) NOT NULL,
 	[Code] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[GroupId] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -4950,6 +5691,10 @@ CREATE TABLE [dbo].[Global](
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
@@ -4981,7 +5726,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[GroupIdCounter](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[GroupIdCounter](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[GroupName] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[GroupCount] [int] NOT NULL,
@@ -4992,6 +5739,10 @@ CREATE TABLE [dbo].[GroupIdCounter](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[GroupIdCounter] ADD  CONSTRAINT [DF_GroupIdCounter_GroupCount]  DEFAULT ((0)) FOR [GroupCount]
 GO
@@ -5001,7 +5752,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[HRIS_Origin](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[HRIS_Origin](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[UserId] [nvarchar](255) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[UserName] [nvarchar](255) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -5024,6 +5777,10 @@ CREATE TABLE [dbo].[HRIS_Origin](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[HRIS_Origin] ADD  CONSTRAINT [DF_HRIS_Origin_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5031,7 +5788,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[i18nText](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[i18nText](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Name_TN] [nvarchar](500) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Name_CN] [nvarchar](500) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5045,12 +5804,18 @@ CREATE TABLE [dbo].[i18nText](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[INDUSTRY](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[INDUSTRY](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[INDCODE] [nvarchar](6) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[TYPE] [int] NOT NULL,
@@ -5072,6 +5837,12 @@ CREATE TABLE [dbo].[INDUSTRY](
 	[TYPE] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[INDUSTRY] ADD  CONSTRAINT [DF_INDUSTRY_major_name]  DEFAULT ('') FOR [Major_Name]
 GO
@@ -5107,7 +5878,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[INDUSTRY_Internal](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[INDUSTRY_Internal](
 	[CustomerId] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[INDCODE] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Create_date] [datetime] NOT NULL,
@@ -5116,12 +5889,18 @@ CREATE TABLE [dbo].[INDUSTRY_Internal](
 	[CustomerId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[INDUSTRY_Overseas](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[INDUSTRY_Overseas](
 	[BranchCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[CustomerId] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[INDCODE] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5132,12 +5911,18 @@ CREATE TABLE [dbo].[INDUSTRY_Overseas](
 	[CustomerId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[LoanApprovalEntry](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[LoanApprovalEntry](
 	[LoanMainId] [int] NOT NULL,
 	[BranchCode] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[EntryNo] [nvarchar](30) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5153,6 +5938,10 @@ CREATE TABLE [dbo].[LoanApprovalEntry](
 	[EntryNo] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[LoanApprovalEntry] ADD  CONSTRAINT [DF__LoanAppro__SortO__51E5D21A]  DEFAULT ((0)) FOR [SortOrder]
 GO
@@ -5160,7 +5949,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[LoanBranchApproveAmountHis](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[LoanBranchApproveAmountHis](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFromId] [int] NOT NULL,
 	[ApplyDate] [datetime] NOT NULL,
@@ -5172,12 +5963,18 @@ CREATE TABLE [dbo].[LoanBranchApproveAmountHis](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[LoanBranchData](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[LoanBranchData](
 	[LoanMainId] [int] NOT NULL,
 	[LoanFlowRoute] [int] NOT NULL,
 	[IsFirstTime] [bit] NOT NULL,
@@ -5199,6 +5996,10 @@ CREATE TABLE [dbo].[LoanBranchData](
 	[LoanMainId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[LoanBranchData] ADD  CONSTRAINT [DF__LoanBranc__IsFir__4A44B052]  DEFAULT ((1)) FOR [IsFirstTime]
 GO
@@ -5206,7 +6007,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[LoanExtApp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[LoanExtApp](
 	[ExtFlowFormId] [int] NOT NULL,
 	[LoanMainId] [int] NOT NULL,
 	[Reason] [nvarchar](max) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5222,12 +6025,18 @@ CREATE TABLE [dbo].[LoanExtApp](
 	[ExtFlowFormId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[LoanMainUnitData](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[LoanMainUnitData](
 	[LoanMainId] [int] NOT NULL,
 	[SelectedUnitCode] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[IsNeedRunLoanUnit] [bit] NOT NULL,
@@ -5244,6 +6053,10 @@ CREATE TABLE [dbo].[LoanMainUnitData](
 	[LoanMainId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[LoanMainUnitData] ADD  CONSTRAINT [DF__LoanMainU__IsNee__5892CFA9]  DEFAULT ((0)) FOR [IsNeedRunLoanUnit]
 GO
@@ -5251,7 +6064,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[LS_LSRSA_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[LS_LSRSA_D_MF](
 	[ACC_CODE] [nvarchar](9) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[ENG_NAME] [nvarchar](42) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[ISIN_CD] [nvarchar](11) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -5262,65 +6077,18 @@ CREATE TABLE [dbo].[LS_LSRSA_D_MF](
 	[EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[m_parameter](
-	[system_code] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[field_code] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[field_name] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[field1] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[field2] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[field3] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[field4] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[field5] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[field6] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[field7] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[Create_date] [datetime] NOT NULL,
-	[Create_user] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[Update_date] [datetime] NOT NULL,
-	[Update_user] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[Memo] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
- CONSTRAINT [PK_m_parameter] PRIMARY KEY CLUSTERED
-(
-	[system_code] ASC,
-	[field_code] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
-) ON [NCRMS_TAB]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_field_name]  DEFAULT ('') FOR [field_name]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_field1]  DEFAULT ('') FOR [field1]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_field2]  DEFAULT ('') FOR [field2]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_field3]  DEFAULT ('') FOR [field3]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_field4]  DEFAULT ('') FOR [field4]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_field5]  DEFAULT ('') FOR [field5]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_field6]  DEFAULT ('') FOR [field6]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_field7]  DEFAULT ('') FOR [field7]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_Create_date]  DEFAULT (getdate()) FOR [Create_date]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_Create_user]  DEFAULT ('') FOR [Create_user]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_Update_date]  DEFAULT (getdate()) FOR [Update_date]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_Update_user]  DEFAULT ('') FOR [Update_user]
-GO
-ALTER TABLE [dbo].[m_parameter] ADD  CONSTRAINT [DF_m_parameter_Memo]  DEFAULT ('') FOR [Memo]
-GO
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[Mail](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Mail](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[UnitCode] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[List_Name] [nvarchar](60) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5338,6 +6106,10 @@ CREATE TABLE [dbo].[Mail](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Mail] ADD  CONSTRAINT [DF_Mail_List_Name]  DEFAULT ('') FOR [List_Name]
 GO
@@ -5375,7 +6147,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Mail_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Mail_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[PK_Id] [int] NOT NULL,
@@ -5398,6 +6172,10 @@ CREATE TABLE [dbo].[Mail_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Mail_his] ADD  CONSTRAINT [DF__Mail_his__SysCre__0BA79404]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5407,7 +6185,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Mail_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Mail_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5430,15 +6210,25 @@ CREATE TABLE [dbo].[Mail_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Mail_temp_UnitCode_FlowFormId] ON [dbo].[Mail_temp]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Mail_temp_UnitCode_FlowFormId] ON [dbo].[Mail_temp]
 (
 	[UnitCode] ASC,
 	[FlowFormId] ASC
 )
 INCLUDE([PK_Id],[TempId],[Mail_Type]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Mail_temp] ADD  CONSTRAINT [DF__Mail_temp__SysCr__0E8400AF]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5448,7 +6238,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailCcMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailCcMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_MailId] [int] NOT NULL,
 	[FK_UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -5459,12 +6251,18 @@ CREATE TABLE [dbo].[MailCcMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailCcMapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailCcMapping_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -5480,6 +6278,10 @@ CREATE TABLE [dbo].[MailCcMapping_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailCcMapping_his] ADD  CONSTRAINT [DF__MailCcMap__SysCr__501CB9E2]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5495,7 +6297,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailCcMapping_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailCcMapping_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5511,12 +6315,22 @@ CREATE TABLE [dbo].[MailCcMapping_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_MailCcMapping_temp_FK_TempId] ON [dbo].[MailCcMapping_temp]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_MailCcMapping_temp_FK_TempId] ON [dbo].[MailCcMapping_temp]
 (
 	[FK_TempId] ASC
 )
 INCLUDE([FK_UserId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailCcMapping_temp] ADD  CONSTRAINT [DF__MailCcMap__SysCr__52F9268D]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5534,7 +6348,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailCustomCcMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailCustomCcMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_MailId] [int] NOT NULL,
 	[CustomMail] [nvarchar](300) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5545,12 +6361,18 @@ CREATE TABLE [dbo].[MailCustomCcMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailCustomCcMapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailCustomCcMapping_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -5566,6 +6388,10 @@ CREATE TABLE [dbo].[MailCustomCcMapping_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailCustomCcMapping_his] ADD  CONSTRAINT [DF__MailCusto__SysCr__7B0717E7]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5581,7 +6407,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailCustomCcMapping_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailCustomCcMapping_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5597,6 +6425,10 @@ CREATE TABLE [dbo].[MailCustomCcMapping_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailCustomCcMapping_temp] ADD  CONSTRAINT [DF__MailCusto__SysCr__55D59338]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5614,7 +6446,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailCustomToMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailCustomToMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_MailId] [int] NOT NULL,
 	[CustomMail] [nvarchar](300) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5625,12 +6459,18 @@ CREATE TABLE [dbo].[MailCustomToMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailCustomToMapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailCustomToMapping_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -5646,6 +6486,10 @@ CREATE TABLE [dbo].[MailCustomToMapping_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailCustomToMapping_his] ADD  CONSTRAINT [DF__MailCusto__SysCr__7DE38492]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5661,7 +6505,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailCustomToMapping_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailCustomToMapping_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5677,6 +6523,10 @@ CREATE TABLE [dbo].[MailCustomToMapping_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailCustomToMapping_temp] ADD  CONSTRAINT [DF__MailCusto__SysCr__58B1FFE3]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5694,7 +6544,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailGroup](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailGroup](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[UnitCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Text_TN] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5711,6 +6563,10 @@ CREATE TABLE [dbo].[MailGroup](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailGroup] ADD  CONSTRAINT [DF_MailGroup_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5722,7 +6578,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailGroupCcMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailGroupCcMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[MailId] [int] NOT NULL,
 	[MailGroupId] [int] NOT NULL,
@@ -5733,6 +6591,10 @@ CREATE TABLE [dbo].[MailGroupCcMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailGroupCcMapping] ADD  CONSTRAINT [DF_MailGroupToCCMapping_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5740,7 +6602,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailGroupCcMapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailGroupCcMapping_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -5756,6 +6620,10 @@ CREATE TABLE [dbo].[MailGroupCcMapping_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailGroupCcMapping_his] ADD  CONSTRAINT [DF__MailGroup__SysCr__26268016]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5771,7 +6639,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailGroupCcMapping_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailGroupCcMapping_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5787,12 +6657,22 @@ CREATE TABLE [dbo].[MailGroupCcMapping_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_MailGroupToCCMapping_temp_FK_TempId] ON [dbo].[MailGroupCcMapping_temp]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_MailGroupToCCMapping_temp_FK_TempId] ON [dbo].[MailGroupCcMapping_temp]
 (
 	[FK_TempId] ASC
 )
 INCLUDE([MailGroupId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailGroupCcMapping_temp] ADD  CONSTRAINT [DF__MailGroup__Creat__2902ECC1]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5812,7 +6692,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailGroupMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailGroupMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[MailId] [int] NOT NULL,
 	[MailGroupId] [int] NOT NULL,
@@ -5823,6 +6705,10 @@ CREATE TABLE [dbo].[MailGroupMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailGroupMapping] ADD  CONSTRAINT [DF_MailGroupMapping_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5830,7 +6716,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailGroupMapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailGroupMapping_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_LogId] [int] NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5846,6 +6734,10 @@ CREATE TABLE [dbo].[MailGroupMapping_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailGroupMapping_his] ADD  CONSTRAINT [DF__MailGroup__SysCr__33B5855E]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5855,7 +6747,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailGroupMapping_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailGroupMapping_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NULL,
 	[PK_Id] [int] NULL,
@@ -5871,12 +6765,22 @@ CREATE TABLE [dbo].[MailGroupMapping_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_MailGroupMapping_temp_FK_TempId] ON [dbo].[MailGroupMapping_temp]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_MailGroupMapping_temp_FK_TempId] ON [dbo].[MailGroupMapping_temp]
 (
 	[FK_TempId] ASC
 )
 INCLUDE([MailGroupId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailGroupMapping_temp] ADD  CONSTRAINT [DF__MailGroup__SysCr__2FE4F47A]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -5886,7 +6790,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailGroupUser](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailGroupUser](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[MailGroup_Id] [int] NOT NULL,
 	[UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -5897,12 +6803,22 @@ CREATE TABLE [dbo].[MailGroupUser](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_MailGroupUser] ON [dbo].[MailGroupUser]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_MailGroupUser] ON [dbo].[MailGroupUser]
 (
 	[PK_Id] ASC,
 	[MailGroup_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailGroupUser] ADD  CONSTRAINT [DF_MailGroupUser_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -5910,7 +6826,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailLog](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailLog](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[UnitCode] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[List_Name] [nvarchar](60) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -5926,6 +6844,10 @@ CREATE TABLE [dbo].[MailLog](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailLog] ADD  CONSTRAINT [DF_MailLog_IsSystem]  DEFAULT ((1)) FOR [IsSystem]
 GO
@@ -5937,7 +6859,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailLog_CcCustomMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailLog_CcCustomMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_LogId] [int] NOT NULL,
 	[CustomMail] [nvarchar](300) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5946,12 +6870,18 @@ CREATE TABLE [dbo].[MailLog_CcCustomMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailLog_CcGroupMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailLog_CcGroupMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_LogId] [int] NOT NULL,
 	[FK_MailGroupId] [int] NOT NULL,
@@ -5960,12 +6890,18 @@ CREATE TABLE [dbo].[MailLog_CcGroupMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailLog_CcMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailLog_CcMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_LogId] [int] NOT NULL,
 	[FK_UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5974,12 +6910,18 @@ CREATE TABLE [dbo].[MailLog_CcMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailLog_CustomMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailLog_CustomMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_LogId] [int] NOT NULL,
 	[CustomMail] [nvarchar](300) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -5988,12 +6930,18 @@ CREATE TABLE [dbo].[MailLog_CustomMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailLog_FileMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailLog_FileMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_LogId] [int] NOT NULL,
 	[FileName] [nvarchar](300) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -6003,12 +6951,18 @@ CREATE TABLE [dbo].[MailLog_FileMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailLog_GroupMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailLog_GroupMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_LogId] [int] NOT NULL,
 	[FK_MailGroupId] [int] NOT NULL,
@@ -6017,12 +6971,18 @@ CREATE TABLE [dbo].[MailLog_GroupMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailLog_Mapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailLog_Mapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_LogId] [int] NOT NULL,
 	[FK_UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -6031,12 +6991,18 @@ CREATE TABLE [dbo].[MailLog_Mapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailToMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailToMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_MailId] [int] NOT NULL,
 	[FK_UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -6047,12 +7013,18 @@ CREATE TABLE [dbo].[MailToMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailToMapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailToMapping_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -6068,6 +7040,10 @@ CREATE TABLE [dbo].[MailToMapping_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailToMapping_his] ADD  CONSTRAINT [DF__MailToMap__SysCr__6F95653B]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6083,7 +7059,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MailToMapping_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MailToMapping_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -6099,12 +7077,22 @@ CREATE TABLE [dbo].[MailToMapping_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_MailToMapping_temp_FK_TempId] ON [dbo].[MailToMapping_temp]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_MailToMapping_temp_FK_TempId] ON [dbo].[MailToMapping_temp]
 (
 	[FK_TempId] ASC
 )
 INCLUDE([FK_UserId],[PK_Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MailToMapping_temp] ADD  CONSTRAINT [DF__MailToMap__SysCr__5B8E6C8E]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6124,7 +7112,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[Menu](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Menu](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[SystemId] [int] NOT NULL,
 	[ParentId] [int] NULL,
@@ -6148,6 +7138,10 @@ CREATE TABLE [dbo].[Menu](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
@@ -6161,7 +7155,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[MIS_CRCY_REF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MIS_CRCY_REF](
 	[CRCY_CHN_NAME] [char](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[CRCY_ENG_NAME] [char](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[CRCY_CODE] [char](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -6170,6 +7166,10 @@ CREATE TABLE [dbo].[MIS_CRCY_REF](
 	[CRCY_CODE] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
@@ -6177,7 +7177,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MONITORDATA](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MONITORDATA](
 	[PK_ID] [int] IDENTITY(1,1) NOT NULL,
 	[GROUP_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[UNIT_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -6208,7 +7210,8 @@ CREATE TABLE [dbo].[MONITORDATA](
 	[PRODUCT_CODE] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[CUR_BOUGHT] [nchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[CUR_SOLD] [nchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
-	[RISKFACTOR] [decimal](10, 2) NULL,
+	[RISKFAC';
+SET @FilegroupSql += N'TOR] [decimal](10, 2) NULL,
 	[WEIGHTS] [int] NULL,
 	[DATADATE] [date] NULL,
 	[Create_Date] [date] NULL,
@@ -6231,10 +7234,16 @@ CREATE TABLE [dbo].[MONITORDATA](
 	[PK_ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_MONITORDATA_ASOFDATE_MARK] ON [dbo].[MONITORDATA]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_MONITORDATA_ASOFDATE_MARK] ON [dbo].[MONITORDATA]
 (
 	[AS_OF_DATE] ASC,
 	[Mark] ASC,
@@ -6242,10 +7251,16 @@ CREATE NONCLUSTERED INDEX [IX_MONITORDATA_ASOFDATE_MARK] ON [dbo].[MONITORDATA]
 	[MATURITY_DATE] ASC
 )
 INCLUDE([PK_ID],[GROUP_NO],[UNIT_NO],[BRANCH_NO],[Create_DateTime],[Create_user]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_MONITORDATA_ASOFDATE_PAGING] ON [dbo].[MONITORDATA]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_MONITORDATA_ASOFDATE_PAGING] ON [dbo].[MONITORDATA]
 (
 	[AS_OF_DATE] ASC,
 	[GROUP_NO] ASC,
@@ -6253,14 +7268,24 @@ CREATE NONCLUSTERED INDEX [IX_MONITORDATA_ASOFDATE_PAGING] ON [dbo].[MONITORDATA
 	[BRANCH_NO] ASC
 )
 INCLUDE([PK_ID],[TRAN_NO],[Mark],[MATURITY_DATE],[PRODUCT_TYPE]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_MONITORDATA_DATE] ON [dbo].[MONITORDATA]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_MONITORDATA_DATE] ON [dbo].[MONITORDATA]
 (
 	[EXT_DATE] ASC,
 	[Year] ASC,
 	[Month] ASC,
 	[Week] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MONITORDATA] ADD  CONSTRAINT [DF_MONITORDATA_REVOLVE_MK]  DEFAULT ((0)) FOR [REVOLVE_MK]
 GO
@@ -6344,7 +7369,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MONITORDATA_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MONITORDATA_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NOT NULL,
@@ -6376,7 +7403,8 @@ CREATE TABLE [dbo].[MONITORDATA_his](
 	[INDUSTRY] [nvarchar](6) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[INDUSTRY_Type] [int] NULL,
 	[PRODUCT_CODE] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
-	[CUR_BOUGHT] [nchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[CUR_BOUG';
+SET @FilegroupSql += N'HT] [nchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[CUR_SOLD] [nchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[RISKFACTOR] [decimal](10, 2) NULL,
 	[WEIGHTS] [int] NULL,
@@ -6401,6 +7429,10 @@ CREATE TABLE [dbo].[MONITORDATA_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MONITORDATA_his] ADD  CONSTRAINT [DF__MONITORDA__SysCr__2C745649]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6410,7 +7442,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[MONITORDATA_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[MONITORDATA_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -6442,7 +7476,8 @@ CREATE TABLE [dbo].[MONITORDATA_temp](
 	[INDUSTRY] [nvarchar](6) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[INDUSTRY_Type] [int] NULL,
 	[PRODUCT_CODE] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
-	[CUR_BOUGHT] [nchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
+	[CUR_BOUG';
+SET @FilegroupSql += N'HT] [nchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[CUR_SOLD] [nchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[RISKFACTOR] [decimal](10, 2) NULL,
 	[WEIGHTS] [int] NULL,
@@ -6467,6 +7502,10 @@ CREATE TABLE [dbo].[MONITORDATA_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[MONITORDATA_temp] ADD  CONSTRAINT [DF__MONITORDA__REVOL__24D33481]  DEFAULT ((0)) FOR [REVOLVE_MK]
 GO
@@ -6486,7 +7525,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[News](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[News](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Type] [int] NULL,
 	[Title] [nvarchar](2000) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -6503,6 +7544,10 @@ CREATE TABLE [dbo].[News](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[News] ADD  CONSTRAINT [DF_News_Contents]  DEFAULT ('') FOR [Contents]
 GO
@@ -6516,7 +7561,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[News_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[News_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NULL,
@@ -6538,6 +7585,10 @@ CREATE TABLE [dbo].[News_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[News_his] ADD  CONSTRAINT [DF__News_his__Update__05CF8A74]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -6559,7 +7610,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[News_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[News_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[FK_NewsPostId] [int] NULL,
@@ -6582,6 +7635,10 @@ CREATE TABLE [dbo].[News_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[News_temp] ADD  CONSTRAINT [DF__News_temp__Updat__0D7ACDDD]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -6597,7 +7654,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[News_Views](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[News_Views](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_NewsId] [int] NOT NULL,
 	[Views] [int] NOT NULL,
@@ -6606,12 +7665,18 @@ CREATE TABLE [dbo].[News_Views](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[NewsCountryType](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[NewsCountryType](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_CountryId] [int] NOT NULL,
 	[FK_NewsId] [int] NOT NULL,
@@ -6620,12 +7685,18 @@ CREATE TABLE [dbo].[NewsCountryType](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[NewsCountryType_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[NewsCountryType_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -6643,6 +7714,10 @@ CREATE TABLE [dbo].[NewsCountryType_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[NewsCountryType_his] ADD  CONSTRAINT [DF__NewsCount__SysCr__0F58F4AE]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6658,7 +7733,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[NewsCountryType_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[NewsCountryType_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -6672,6 +7749,10 @@ CREATE TABLE [dbo].[NewsCountryType_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[NewsCountryType_temp] ADD  CONSTRAINT [DF__NewsCount__SysCr__6DF800E3]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6689,7 +7770,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[NewsFileMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[NewsFileMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_NewsId] [int] NOT NULL,
 	[FK_FileCenterId] [int] NOT NULL,
@@ -6700,12 +7783,18 @@ CREATE TABLE [dbo].[NewsFileMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[NewsFileMapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[NewsFileMapping_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -6722,6 +7811,10 @@ CREATE TABLE [dbo].[NewsFileMapping_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[NewsFileMapping_his] ADD  CONSTRAINT [DF__NewsFileM__SysCr__12356159]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6737,7 +7830,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[NewsFileMapping_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[NewsFileMapping_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -6753,6 +7848,10 @@ CREATE TABLE [dbo].[NewsFileMapping_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[NewsFileMapping_temp] ADD  CONSTRAINT [DF__NewsFileM__SysCr__1333A733]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -6770,7 +7869,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Notice](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Notice](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[NoticeTitle] [nvarchar](255) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[NoticeType] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -6782,12 +7883,18 @@ CREATE TABLE [dbo].[Notice](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[NoticeUser](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[NoticeUser](
 	[NoticeId] [int] NOT NULL,
 	[UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[IsRead] [bit] NOT NULL,
@@ -6798,17 +7905,29 @@ CREATE TABLE [dbo].[NoticeUser](
 	[UserId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_NoticeUser] ON [dbo].[NoticeUser]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_NoticeUser] ON [dbo].[NoticeUser]
 (
 	[NoticeId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[OldData_Quota](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OldData_Quota](
 	[ExcelName] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[CountryCode2] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[RatingLevel] [int] NOT NULL,
@@ -6820,12 +7939,18 @@ CREATE TABLE [dbo].[OldData_Quota](
 	[CountryCode2] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[OldData_QuotaWeight](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OldData_QuotaWeight](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[ExcelName] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[CountryId] [int] NOT NULL,
@@ -6837,12 +7962,18 @@ CREATE TABLE [dbo].[OldData_QuotaWeight](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[OldData_Rating](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OldData_Rating](
 	[ExcelName] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[CountryCode2] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Moodys] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -6854,12 +7985,18 @@ CREATE TABLE [dbo].[OldData_Rating](
 	[CountryCode2] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[OS_LNSLMSD_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OS_LNSLMSD_D_MF](
 	[LNSLMSD_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSLMSD_LINE_NO] [nvarchar](13) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSLMSD_LINE_TYPE] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -6878,6 +8015,10 @@ CREATE TABLE [dbo].[OS_LNSLMSD_D_MF](
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[OS_LNSLMSD_D_MF] ADD  CONSTRAINT [DF_OS_LNSLMSD_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -6887,7 +8028,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[OS_LNSLNKD_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OS_LNSLNKD_D_MF](
 	[LNSLNKD_BRANCH_NO] [char](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSLNKD_DEPT_NO] [char](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSLNKD_LINE_NO] [char](13) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -6899,6 +8042,10 @@ CREATE TABLE [dbo].[OS_LNSLNKD_D_MF](
 	[LNSLNKD_LOAD_TIME] [char](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
@@ -6908,7 +8055,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[OS_LNSMSTD_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OS_LNSMSTD_D_MF](
 	[LNSMSTD_STATUS] [nvarchar](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSMSTD_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSMSTD_TX_TYPE] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -6926,6 +8075,10 @@ CREATE TABLE [dbo].[OS_LNSMSTD_D_MF](
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[OS_LNSMSTD_D_MF] ADD  CONSTRAINT [DF_OS_LNSMSTD_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -6939,7 +8092,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[OS_LNSSECD_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OS_LNSSECD_D_MF](
 	[LNSSECD_BRANCH_NO] [char](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSSECD_CUSTOMER_ID] [char](11) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSSECD_SEC_NO] [char](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -6969,6 +8124,10 @@ CREATE TABLE [dbo].[OS_LNSSECD_D_MF](
 	[LNSSECD_LOAD_TIME] [char](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
@@ -6978,7 +8137,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[OSBDKF02_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OSBDKF02_MF](
 	[OSBDKF02_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[OSBDKF02_TRAN_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[OSBDKF02_TX_DATE] [date] NULL,
@@ -6997,6 +8158,10 @@ CREATE TABLE [dbo].[OSBDKF02_MF](
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[OSBDKF02_MF] ADD  CONSTRAINT [DF_OSBDKF02_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -7006,7 +8171,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[OSFXKF02_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OSFXKF02_MF](
 	[OSFXKF02_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[OSFXKF02_TRAN_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[OSFXKF02_TX_DATE] [date] NULL,
@@ -7025,6 +8192,10 @@ CREATE TABLE [dbo].[OSFXKF02_MF](
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[OSFXKF02_MF] ADD  CONSTRAINT [DF_OSFXKF02_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -7032,7 +8203,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[OSISKF02_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OSISKF02_MF](
 	[OSISKF02_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[OSISKF02_TRAN_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[OSISKF02_TX_DATE] [date] NULL,
@@ -7048,6 +8221,10 @@ CREATE TABLE [dbo].[OSISKF02_MF](
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[OSISKF02_MF] ADD  CONSTRAINT [DF_OSISKF02_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -7055,7 +8232,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[OSMMKF02_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OSMMKF02_MF](
 	[OSMMKF02_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[OSMMKF02_TRAN_NO] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[OSMMKF02_TX_DATE] [date] NULL,
@@ -7071,6 +8250,10 @@ CREATE TABLE [dbo].[OSMMKF02_MF](
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[OSMMKF02_MF] ADD  CONSTRAINT [DF_OSMMKF02_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -7078,7 +8261,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Permissions](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Permissions](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Role_Id] [int] NOT NULL,
 	[FK_Feature_Id] [int] NULL,
@@ -7089,6 +8274,10 @@ CREATE TABLE [dbo].[Permissions](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Permissions] ADD  CONSTRAINT [DF_PERMISSIONS_FK_Role_Id]  DEFAULT ((0)) FOR [FK_Role_Id]
 GO
@@ -7102,7 +8291,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Permissions_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Permissions_his](
 	[log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[logType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[log_Role_Id] [int] NULL,
@@ -7118,6 +8309,10 @@ CREATE TABLE [dbo].[Permissions_his](
 	[log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Permissions_his] ADD  CONSTRAINT [DF_Permissions_his_FK_Role_Id]  DEFAULT ('') FOR [FK_Role_Id]
 GO
@@ -7137,7 +8332,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Permissions_Query](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Permissions_Query](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Role_Id] [int] NOT NULL,
 	[LevelCode] [int] NOT NULL,
@@ -7149,6 +8346,10 @@ CREATE TABLE [dbo].[Permissions_Query](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Permissions_Query] ADD  CONSTRAINT [DF_Permissions_Query_FK_Role_Id]  DEFAULT ((0)) FOR [FK_Role_Id]
 GO
@@ -7168,7 +8369,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Permissions_Query_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Permissions_Query_his](
 	[log_id] [int] IDENTITY(1,1) NOT NULL,
 	[logtype] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[log_Role_Id] [int] NOT NULL,
@@ -7185,6 +8388,10 @@ CREATE TABLE [dbo].[Permissions_Query_his](
 	[log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Permissions_Query_his] ADD  CONSTRAINT [DF_Permissions_Query_his_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -7194,7 +8401,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Post](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Post](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Type] [int] NULL,
 	[Title] [nvarchar](2000) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -7212,6 +8421,10 @@ CREATE TABLE [dbo].[Post](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Post] ADD  CONSTRAINT [DF_Post_Contents]  DEFAULT ('') FOR [Contents]
 GO
@@ -7221,7 +8434,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Post_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Post_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NULL,
@@ -7244,6 +8459,10 @@ CREATE TABLE [dbo].[Post_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Post_his] ADD  CONSTRAINT [DF__Post_his__SysCre__1ACAA75A]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7261,7 +8480,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Post_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Post_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -7285,6 +8506,10 @@ CREATE TABLE [dbo].[Post_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Post_temp] ADD  CONSTRAINT [DF__Post_temp__SysCr__18EC8089]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7296,7 +8521,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Post_Views](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Post_Views](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_PostId] [int] NOT NULL,
 	[Views] [int] NOT NULL,
@@ -7305,12 +8532,18 @@ CREATE TABLE [dbo].[Post_Views](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[PostCountryType](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[PostCountryType](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_CountryId] [int] NOT NULL,
 	[FK_PostId] [int] NOT NULL,
@@ -7319,12 +8552,18 @@ CREATE TABLE [dbo].[PostCountryType](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[PostCountryType_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[PostCountryType_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -7342,6 +8581,10 @@ CREATE TABLE [dbo].[PostCountryType_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[PostCountryType_his] ADD  CONSTRAINT [DF__PostCount__SysCr__1E9B383E]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7357,7 +8600,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[PostCountryType_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[PostCountryType_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -7371,6 +8616,10 @@ CREATE TABLE [dbo].[PostCountryType_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[PostCountryType_temp] ADD  CONSTRAINT [DF__PostCount__SysCr__683F278D]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7388,7 +8637,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[PostFileMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[PostFileMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_PostId] [int] NOT NULL,
 	[FK_FileCenterId] [int] NOT NULL,
@@ -7399,12 +8650,18 @@ CREATE TABLE [dbo].[PostFileMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[PostFileMapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[PostFileMapping_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -7421,6 +8678,10 @@ CREATE TABLE [dbo].[PostFileMapping_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[PostFileMapping_his] ADD  CONSTRAINT [DF__PostFileM__SysCr__2177A4E9]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7436,7 +8697,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[PostFileMapping_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[PostFileMapping_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -7452,6 +8715,10 @@ CREATE TABLE [dbo].[PostFileMapping_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[PostFileMapping_temp] ADD  CONSTRAINT [DF__PostFileM__SysCr__161013DE]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7469,7 +8736,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ProductMaster](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ProductMaster](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[GroupCode] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[ProductCode] [nvarchar](5) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -7482,6 +8751,10 @@ CREATE TABLE [dbo].[ProductMaster](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ProductMaster] ADD  CONSTRAINT [DF_ProductMaster_GroupCode]  DEFAULT ('') FOR [GroupCode]
 GO
@@ -7501,7 +8774,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuickLink](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuickLink](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Menu_Id] [int] NULL,
 	[ParentId] [int] NULL,
@@ -7517,12 +8792,18 @@ CREATE TABLE [dbo].[QuickLink](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_D](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_D](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[CountryId] [int] NOT NULL,
 	[UnitCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -7537,6 +8818,10 @@ CREATE TABLE [dbo].[QuotaBank_D](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_D] ADD  CONSTRAINT [DF_QuotaBank_D_Memo]  DEFAULT ('') FOR [Memo]
 GO
@@ -7548,7 +8833,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_D_Form_AllData](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_D_Form_AllData](
 	[Pk_Id] [int] IDENTITY(1,1) NOT NULL,
 	[QuotaFormAllData_MId] [int] NOT NULL,
 	[UnitCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -7558,6 +8845,10 @@ CREATE TABLE [dbo].[QuotaBank_D_Form_AllData](
 	[Pk_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'暫存資料識別碼（流水號）' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'QuotaBank_D_Form_AllData', @level2type=N'COLUMN',@level2name=N'Pk_Id'
 GO
@@ -7565,7 +8856,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_D_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_D_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -7580,6 +8873,10 @@ CREATE TABLE [dbo].[QuotaBank_D_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_D_his] ADD  CONSTRAINT [DF__QuotaBank__SysCr__109731AA]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7595,7 +8892,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_D_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_D_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -7610,6 +8909,10 @@ CREATE TABLE [dbo].[QuotaBank_D_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_D_temp] ADD  CONSTRAINT [DF__QuotaBank___Memo__6D4DF56D]  DEFAULT ('') FOR [Memo]
 GO
@@ -7621,7 +8924,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_D_Week](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_D_Week](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[QuotaDate] [date] NULL,
 	[Year] [int] NOT NULL,
@@ -7640,10 +8945,16 @@ CREATE TABLE [dbo].[QuotaBank_D_Week](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_QuotaBank_D_Week] ON [dbo].[QuotaBank_D_Week]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE UNIQUE NONCLUSTERED INDEX [IX_QuotaBank_D_Week] ON [dbo].[QuotaBank_D_Week]
 (
 	[Year] ASC,
 	[Month] ASC,
@@ -7651,6 +8962,10 @@ CREATE UNIQUE NONCLUSTERED INDEX [IX_QuotaBank_D_Week] ON [dbo].[QuotaBank_D_Wee
 	[CountryId] ASC,
 	[UnitCode] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_D_Week] ADD  CONSTRAINT [DF_QuotaBank_D_Week_Memo]  DEFAULT ('') FOR [Memo]
 GO
@@ -7662,7 +8977,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_Form_Data](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_Form_Data](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NOT NULL,
 	[TotalNetWorthUSD] [decimal](18, 2) NOT NULL,
@@ -7672,6 +8989,10 @@ CREATE TABLE [dbo].[QuotaBank_Form_Data](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_Form_Data] ADD  CONSTRAINT [DF_QuotaBank_Form_Data_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7679,7 +9000,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_Form_ParentWeight](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_Form_ParentWeight](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NOT NULL,
 	[CountryId] [int] NOT NULL,
@@ -7691,6 +9014,10 @@ CREATE TABLE [dbo].[QuotaBank_Form_ParentWeight](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'暫存資料識別碼（流水號）' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'QuotaBank_Form_ParentWeight', @level2type=N'COLUMN',@level2name=N'PK_Id'
 GO
@@ -7698,7 +9025,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_M](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_M](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[CountryId] [int] NOT NULL,
 	[ApprovedAmount] [int] NOT NULL,
@@ -7712,6 +9041,10 @@ CREATE TABLE [dbo].[QuotaBank_M](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_M] ADD  CONSTRAINT [DF_QuotaBank_M_TotalUtilizedAmount]  DEFAULT ((0)) FOR [TotalUtilizedAmount]
 GO
@@ -7729,7 +9062,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_M_Form_AllData](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_M_Form_AllData](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[CountryId] [int] NOT NULL,
@@ -7744,6 +9079,10 @@ CREATE TABLE [dbo].[QuotaBank_M_Form_AllData](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_M_Form_AllData] ADD  CONSTRAINT [DF_QuotaBank_M_Form_AllData_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7757,7 +9096,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_M_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_M_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NOT NULL,
@@ -7774,6 +9115,10 @@ CREATE TABLE [dbo].[QuotaBank_M_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_M_his] ADD  CONSTRAINT [DF_QuotaBank_M_his_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7785,7 +9130,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_M_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_M_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -7802,6 +9149,10 @@ CREATE TABLE [dbo].[QuotaBank_M_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_M_temp] ADD  CONSTRAINT [DF_QuotaBank_M_temp_SysCreateDate]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7813,7 +9164,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_M_Week](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_M_Week](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[QuotaDate] [date] NULL,
 	[Year] [int] NOT NULL,
@@ -7838,6 +9191,12 @@ CREATE TABLE [dbo].[QuotaBank_M_Week](
 	[CountryId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_M_Week] ADD  CONSTRAINT [DF_QuotaBank_M_Week_TotalUtilizedAmount]  DEFAULT ((0)) FOR [TotalUtilizedAmount]
 GO
@@ -7855,7 +9214,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_Weight](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_Weight](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[QuotaBankDetailId] [int] NOT NULL,
 	[CountryWeightId] [int] NOT NULL,
@@ -7869,12 +9230,18 @@ CREATE TABLE [dbo].[QuotaBank_Weight](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_Weight_Form_AllData](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_Weight_Form_AllData](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[QuotaD_Form_AllDataId] [int] NOT NULL,
 	[WeightPercent] [int] NOT NULL,
@@ -7884,6 +9251,10 @@ CREATE TABLE [dbo].[QuotaBank_Weight_Form_AllData](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'主表暫存資料外鍵' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'QuotaBank_Weight_Form_AllData', @level2type=N'COLUMN',@level2name=N'QuotaD_Form_AllDataId'
 GO
@@ -7891,7 +9262,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_Weight_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_Weight_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -7905,6 +9278,10 @@ CREATE TABLE [dbo].[QuotaBank_Weight_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_Weight_his] ADD  CONSTRAINT [DF__QuotaBank__SysCr__13739E55]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7920,7 +9297,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_Weight_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_Weight_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -7934,6 +9313,10 @@ CREATE TABLE [dbo].[QuotaBank_Weight_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_Weight_temp] ADD  CONSTRAINT [DF__QuotaBank__SysCr__73FAF2FC]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -7951,7 +9334,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[QuotaBank_Weight_Week](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[QuotaBank_Weight_Week](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[QuotaDate] [date] NULL,
 	[Year] [int] NOT NULL,
@@ -7971,10 +9356,16 @@ CREATE TABLE [dbo].[QuotaBank_Weight_Week](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_QuotaBank_Weight_Week] ON [dbo].[QuotaBank_Weight_Week]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE UNIQUE NONCLUSTERED INDEX [IX_QuotaBank_Weight_Week] ON [dbo].[QuotaBank_Weight_Week]
 (
 	[Year] ASC,
 	[Month] ASC,
@@ -7982,6 +9373,10 @@ CREATE UNIQUE NONCLUSTERED INDEX [IX_QuotaBank_Weight_Week] ON [dbo].[QuotaBank_
 	[UnitCode] ASC,
 	[CountryWeightId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[QuotaBank_Weight_Week] ADD  CONSTRAINT [DF_QuotaBank_Weight_Week_QuotaBankDetailId]  DEFAULT ((1)) FOR [QuotaBankDetailId]
 GO
@@ -7993,7 +9388,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RatingRatioMaster](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RatingRatioMaster](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Year] [int] NOT NULL,
 	[RatingLevel] [int] NOT NULL,
@@ -8008,13 +9405,23 @@ CREATE TABLE [dbo].[RatingRatioMaster](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_RatingRatioMaster] ON [dbo].[RatingRatioMaster]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_RatingRatioMaster] ON [dbo].[RatingRatioMaster]
 (
 	[Year] ASC,
 	[RatingLevel] ASC,
 	[HasFCBBranch] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[RatingRatioMaster] ADD  CONSTRAINT [DF_RatingRatioMaster_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8024,7 +9431,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RatingRatioMaster_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RatingRatioMaster_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Fk_logId] [int] NOT NULL,
@@ -8044,6 +9453,10 @@ CREATE TABLE [dbo].[RatingRatioMaster_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[RatingRatioMaster_his] ADD  CONSTRAINT [DF__RatingRat__SysCr__076CEECC]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -8059,7 +9472,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RatingRatioMaster_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RatingRatioMaster_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8079,6 +9494,10 @@ CREATE TABLE [dbo].[RatingRatioMaster_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[RatingRatioMaster_temp] ADD  CONSTRAINT [DF__RatingRat__Creat__0A495B77]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8100,7 +9519,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RatingRatioMaster_Week](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RatingRatioMaster_Week](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Year] [int] NOT NULL,
 	[Month] [int] NOT NULL,
@@ -8118,8 +9539,14 @@ CREATE TABLE [dbo].[RatingRatioMaster_Week](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_RatingRatioMaster_Week] ON [dbo].[RatingRatioMaster_Week]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_RatingRatioMaster_Week] ON [dbo].[RatingRatioMaster_Week]
 (
 	[Year] ASC,
 	[Month] ASC,
@@ -8127,6 +9554,10 @@ CREATE NONCLUSTERED INDEX [IX_RatingRatioMaster_Week] ON [dbo].[RatingRatioMaste
 	[RatingLevel] ASC,
 	[HasFCBBranch] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[RatingRatioMaster_Week] ADD  CONSTRAINT [DF_RatingRatioMaster_Week_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8136,7 +9567,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RatingRatioMasterBase](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RatingRatioMasterBase](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[RatingLevel] [int] NOT NULL,
 	[RatingLevelName] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8151,6 +9584,10 @@ CREATE TABLE [dbo].[RatingRatioMasterBase](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[RatingRatioMasterBase] ADD  CONSTRAINT [DF_RatingRatioMasterBase_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8160,7 +9597,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RiskLineD](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RiskLineD](
 	[GroupCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[UnitCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[BranchCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8190,12 +9629,18 @@ CREATE TABLE [dbo].[RiskLineD](
 	[Apply_NO] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RiskLineO](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RiskLineO](
 	[GroupCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[UnitCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[BranchCode] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8225,12 +9670,18 @@ CREATE TABLE [dbo].[RiskLineO](
 	[Apply_NO] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Role](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Role](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Unit_Code] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[RoleName_TN] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8246,13 +9697,23 @@ CREATE TABLE [dbo].[Role](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Role_FK_Unit_Code] ON [dbo].[Role]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Role_FK_Unit_Code] ON [dbo].[Role]
 (
 	[FK_Unit_Code] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Role] ADD  CONSTRAINT [DF_Role_RoleName_TN]  DEFAULT ('') FOR [RoleName_TN]
 GO
@@ -8288,7 +9749,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Role_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Role_his](
 	[log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[logType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[PK_Id] [int] NOT NULL,
@@ -8308,6 +9771,10 @@ CREATE TABLE [dbo].[Role_his](
 	[log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Role_his] ADD  CONSTRAINT [DF_Role_his_Update_date]  DEFAULT (getdate()) FOR [Update_date]
 GO
@@ -8335,7 +9802,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Role_Position_Mapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Role_Position_Mapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Role_Id] [int] NOT NULL,
 	[FK_Branch_Code] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -8348,22 +9817,38 @@ CREATE TABLE [dbo].[Role_Position_Mapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Role_Position_Mapping] ON [dbo].[Role_Position_Mapping]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Role_Position_Mapping] ON [dbo].[Role_Position_Mapping]
 (
 	[TitleCode] ASC,
 	[FK_Branch_Code] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Role_Position_Mapping_1] ON [dbo].[Role_Position_Mapping]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Role_Position_Mapping_1] ON [dbo].[Role_Position_Mapping]
 (
 	[TitleCode] ASC,
 	[FK_Department_Code] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Role_Position_Mapping] ADD  CONSTRAINT [DF_Role_Position_Mapping_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8377,7 +9862,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Role_Position_Mapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Role_Position_Mapping_his](
 	[log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[logType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[log_Role_Id] [int] NULL,
@@ -8395,6 +9882,10 @@ CREATE TABLE [dbo].[Role_Position_Mapping_his](
 	[log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Role_Position_Mapping_his] ADD  CONSTRAINT [DF_Role_Position_Mapping_his_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8422,7 +9913,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Role_User_Mapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Role_User_Mapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_Role_Id] [int] NOT NULL,
 	[FK_User_Id] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8433,18 +9926,34 @@ CREATE TABLE [dbo].[Role_User_Mapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_Role_User_Mapping] ON [dbo].[Role_User_Mapping]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Role_User_Mapping] ON [dbo].[Role_User_Mapping]
 (
 	[FK_User_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_Role_User_Mapping_1] ON [dbo].[Role_User_Mapping]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_Role_User_Mapping_1] ON [dbo].[Role_User_Mapping]
 (
 	[FK_Role_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Role_User_Mapping] ADD  CONSTRAINT [DF_USER_PERMISSIONS_MAPPING_FK_Role_Id]  DEFAULT ((0)) FOR [FK_Role_Id]
 GO
@@ -8466,7 +9975,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Role_User_Mapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Role_User_Mapping_his](
 	[log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[logType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[log_Role_Id] [int] NULL,
@@ -8482,6 +9993,10 @@ CREATE TABLE [dbo].[Role_User_Mapping_his](
 	[log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Role_User_Mapping_his] ADD  CONSTRAINT [DF_User_Role_Mapping_his_FK_Role_Id]  DEFAULT ((0)) FOR [FK_Role_Id]
 GO
@@ -8509,7 +10024,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPA](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPA](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Type] [int] NULL,
 	[Title] [nvarchar](2000) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -8526,6 +10043,10 @@ CREATE TABLE [dbo].[RPA](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[RPA] ADD  CONSTRAINT [DF_RPA_Contents]  DEFAULT ('') FOR [Contents]
 GO
@@ -8547,7 +10068,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPA_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPA_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[FlowFormId] [int] NULL,
@@ -8569,12 +10092,18 @@ CREATE TABLE [dbo].[RPA_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPA_Source](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPA_Source](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Title] [nvarchar](2000) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Contents] [nvarchar](2000) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -8589,12 +10118,18 @@ CREATE TABLE [dbo].[RPA_Source](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPA_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPA_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8617,6 +10152,10 @@ CREATE TABLE [dbo].[RPA_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[RPA_temp] ADD  CONSTRAINT [DF_RPA_temp_Url]  DEFAULT ('') FOR [Url]
 GO
@@ -8634,7 +10173,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPA_Views](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPA_Views](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_RPAId] [int] NOT NULL,
 	[Views] [int] NOT NULL,
@@ -8643,6 +10184,10 @@ CREATE TABLE [dbo].[RPA_Views](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[RPA_Views] ADD  CONSTRAINT [DF_RPA_Views_Views]  DEFAULT ((0)) FOR [Views]
 GO
@@ -8650,7 +10195,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPACountryType](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPACountryType](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_RPAId] [int] NOT NULL,
 	[FK_CountryId] [int] NOT NULL,
@@ -8659,12 +10206,18 @@ CREATE TABLE [dbo].[RPACountryType](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPACountryType_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPACountryType_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Fk_LogId] [int] NULL,
 	[FK_CountryId] [int] NULL,
@@ -8682,12 +10235,18 @@ CREATE TABLE [dbo].[RPACountryType_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPACountryType_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPACountryType_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8701,6 +10260,10 @@ CREATE TABLE [dbo].[RPACountryType_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[RPACountryType_temp] ADD  CONSTRAINT [DF__RPACountr__SysCr__6B1B9438]  DEFAULT (getdate()) FOR [SysCreateDate]
 GO
@@ -8718,7 +10281,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPAFileMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPAFileMapping](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_RPAId] [int] NOT NULL,
 	[FK_FileCenterId] [int] NOT NULL,
@@ -8729,12 +10294,18 @@ CREATE TABLE [dbo].[RPAFileMapping](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPAFileMapping_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPAFileMapping_his](
 	[Log_Id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Fk_LogId] [int] NULL,
@@ -8751,12 +10322,18 @@ CREATE TABLE [dbo].[RPAFileMapping_his](
 	[Log_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[RPAFileMapping_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[RPAFileMapping_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FK_TempId] [int] NOT NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8772,6 +10349,10 @@ CREATE TABLE [dbo].[RPAFileMapping_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[RPAFileMapping_temp] ADD  CONSTRAINT [DF__NewsPostF__Creat__61D155C9]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -8791,7 +10372,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ScheduleJobs](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ScheduleJobs](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Name] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Description] [nvarchar](500) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8813,6 +10396,10 @@ CREATE TABLE [dbo].[ScheduleJobs](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ScheduleJobs] ADD  CONSTRAINT [DF_ScheduleJobs_Name]  DEFAULT ('') FOR [Name]
 GO
@@ -8872,7 +10459,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ScheduleJobs_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ScheduleJobs_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NULL,
@@ -8899,6 +10488,10 @@ CREATE TABLE [dbo].[ScheduleJobs_his](
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ScheduleJobs_his] ADD  CONSTRAINT [DF__ScheduleJo__Name__53F837BE]  DEFAULT ('') FOR [Name]
 GO
@@ -8940,7 +10533,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ScheduleJobs_RECORD](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ScheduleJobs_RECORD](
 	[Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_ScheduleJobsID] [int] NOT NULL,
 	[Name] [nvarchar](200) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -8956,6 +10551,10 @@ CREATE TABLE [dbo].[ScheduleJobs_RECORD](
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ScheduleJobs_RECORD] ADD  CONSTRAINT [DF_ScheduleJobs_RECORD_Name]  DEFAULT ('') FOR [Name]
 GO
@@ -8989,7 +10588,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ScheduleJobs_temp](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ScheduleJobs_temp](
 	[TempId] [int] IDENTITY(1,1) NOT NULL,
 	[FlowFormId] [int] NULL,
 	[ModifyType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -9016,6 +10617,10 @@ CREATE TABLE [dbo].[ScheduleJobs_temp](
 	[TempId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ScheduleJobs_temp] ADD  CONSTRAINT [DF__ScheduleJo__Name__44B5F42E]  DEFAULT ('') FOR [Name]
 GO
@@ -9053,7 +10658,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[SysData](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[SysData](
 	[Id] [int] IDENTITY(1,1) NOT NULL,
 	[Name_TN] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Name_CN] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -9073,6 +10680,10 @@ CREATE TABLE [dbo].[SysData](
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
@@ -9086,7 +10697,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[SysLog](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[SysLog](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[System_code] [varchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[EventName] [varchar](1000) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -9104,6 +10717,10 @@ CREATE TABLE [dbo].[SysLog](
 	[ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
@@ -9111,7 +10728,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[TempModifyRecord](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[TempModifyRecord](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FormId] [int] NOT NULL,
 	[TempId] [int] NOT NULL,
@@ -9126,6 +10745,10 @@ CREATE TABLE [dbo].[TempModifyRecord](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[TempModifyRecord] ADD  CONSTRAINT [DF_TempModifyRecord_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -9133,7 +10756,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Title](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Title](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[TitleCode] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[TitleName_TN] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -9146,13 +10771,23 @@ CREATE TABLE [dbo].[Title](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_Title] ON [dbo].[Title]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE UNIQUE NONCLUSTERED INDEX [IX_Title] ON [dbo].[Title]
 (
 	[TitleCode] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Title] ADD  CONSTRAINT [DF_Title_seq]  DEFAULT ((1)) FOR [seq]
 GO
@@ -9160,17 +10795,25 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[TitleMapping](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[TitleMapping](
 	[TitleCode] [nvarchar](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[TitleId] [int] NULL,
 	[TitleName] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Users](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Users](
 	[UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[UserName] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Email] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -9196,14 +10839,24 @@ CREATE TABLE [dbo].[Users](
 	[UserId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_Users] ON [dbo].[Users]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE UNIQUE NONCLUSTERED INDEX [IX_Users] ON [dbo].[Users]
 (
 	[UserId] ASC,
 	[UserName] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Users] ADD  CONSTRAINT [DF_Users_IsActive]  DEFAULT ((0)) FOR [IsActive]
 GO
@@ -9261,7 +10914,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Users_log](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[Users_log](
 	[logType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[UserName] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -9285,6 +10940,10 @@ CREATE TABLE [dbo].[Users_log](
 	[Memo] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SysCreateDate] [datetime] NOT NULL
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[Users_log] ADD  CONSTRAINT [DF_Users_his_IsActive]  DEFAULT ((0)) FOR [IsActive]
 GO
@@ -9348,7 +11007,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[UserTextLibrary](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[UserTextLibrary](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Text] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -9357,19 +11018,31 @@ CREATE TABLE [dbo].[UserTextLibrary](
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_UserTextLibrary] ON [dbo].[UserTextLibrary]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_UserTextLibrary] ON [dbo].[UserTextLibrary]
 (
 	[UserId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[UserToken](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[UserToken](
 	[PK_ID] [int] IDENTITY(1,1) NOT NULL,
 	[UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Token] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -9383,13 +11056,23 @@ CREATE TABLE [dbo].[UserToken](
 	[PK_ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
 ) ON [NCRMS_TAB]
+';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_UserToken] ON [dbo].[UserToken]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE UNIQUE NONCLUSTERED INDEX [IX_UserToken] ON [dbo].[UserToken]
 (
 	[Token] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[UserToken] ADD  CONSTRAINT [DF_UserToken_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO
@@ -13305,14 +14988,14 @@ BEGIN
 			(SUKMM_MATURITY_DATE IS NULL OR SUKMM_MATURITY_DATE > SUKMM_EXT_DATE) AND -- 並去除當日到期之資料
 			TRIM(SUKMM_TRN_TYPE) IN ('1','3') AND -- 只抓取正的
 			SUKMM_COUNTRY_RISK <> 'TW' AND
-			(
-				-- 條件1：非 group_id = '99999' 的客戶
-				(TRIM(SUKMM_CUST_NAME1) NOT IN (SELECT customer_name FROM groupdata WHERE group_id = '99999'))
-				OR
-				-- 條件2：group_id = '99999' 的客戶，但排除 TWD 幣別
-				(TRIM(SUKMM_CUST_NAME1) IN (SELECT customer_name FROM groupdata WHERE group_id = '99999')
-				 AND SUKMM_CURENCY_COD <> 'TWD')
-			) AND
+			--(
+			--	-- 條件1：非 group_id = '99999' 的客戶
+			--	(TRIM(SUKMM_CUST_NAME1) NOT IN (SELECT customer_name FROM groupdata WHERE group_id = '99999'))
+			--	OR
+			--	-- 條件2：group_id = '99999' 的客戶，但排除 TWD 幣別
+			--	(TRIM(SUKMM_CUST_NAME1) IN (SELECT customer_name FROM groupdata WHERE group_id = '99999')
+			--	 AND SUKMM_CURENCY_COD <> 'TWD')
+			--) AND
 			EXISTS (
 				SELECT 1
 				FROM ARS_SUKNMM_D_MF MF2
@@ -13636,349 +15319,6 @@ BEGIN
     BEGIN CATCH
         DECLARE @ErrorMsg NVARCHAR(4000) = ERROR_MESSAGE();
         PRINT '發生錯誤: ' + @ErrorMsg;
-        THROW;
-    END CATCH
-END
-GO
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE   PROCEDURE [dbo].[usp_BmiRatingCount]
-    @Date DATE,
-    @CountryRatings [dbo].[CountryRatingResultType] READONLY
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    BEGIN TRY
-        DECLARE @Year AS INT, @Month AS INT, @Week AS INT;
-        SELECT @Year = YEAR(@Date), @Month = MONTH(@Date), @Week = dbo.ufn_GetWeekOfMonth(@Date)
-
-        DELETE CreditRating_CountBmi_his
-        WHERE [YEAR] = @Year AND [Month] = @Month AND [Week] = @Week
-
-        DELETE CreditRating_CountBmi
-        OUTPUT
-            @Year, @Month, @Week,
-            deleted.FK_Country_Id, deleted.CountryName, deleted.CountryRating, deleted.TitleCountryRating,
-            deleted.NominalGDP_Score, deleted.NominalGDP, deleted.RealGDPGrowthIMFAE_Score, deleted.RealGDPGrowthIMFAE,
-            deleted.RealGDPGrowth_Score, deleted.RealGDPGrowth, deleted.ConsumerPriceIMFAE_Score, deleted.ConsumerPriceIMFAE,
-            deleted.ConsumerPrice_Score, deleted.ConsumerPrice, deleted.Unemployment_Score, deleted.Unemployment,
-            deleted.ImportCoverMonths_Score, deleted.ImportCoverMonths, deleted.TotalExternalDebtStock_Score, deleted.TotalExternalDebtStock,
-            deleted.ShortTermExternalDebt_Score, deleted.ShortTermExternalDebt, deleted.BudgetBalance_Score, deleted.BudgetBalance,
-            deleted.TotalGovernmentDebt_Score, deleted.TotalGovernmentDebt, deleted.PoliticalRisk_Score, deleted.PoliticalRisk,
-            deleted.SecurityRisk_Score, deleted.SecurityRisk, deleted.BusinessStrategy_Explain, deleted.BusinessStrategy,
-            deleted.CreditRating_Explain, deleted.CreditRating, deleted.Outlook_Explain, deleted.Outlook,
-            deleted.Other_Explain, deleted.Other, deleted.End_Explain, deleted.AssessmentDay
-        INTO CreditRating_CountBmi_his(
-            [Year], [Month], [Week],
-            [FK_Country_Id], [CountryName], [CountryRating], [TitleCountryRating],
-            [NominalGDP_Score], [NominalGDP], [RealGDPGrowthIMFAE_Score], [RealGDPGrowthIMFAE],
-            [RealGDPGrowth_Score], [RealGDPGrowth], [ConsumerPriceIMFAE_Score], [ConsumerPriceIMFAE],
-            [ConsumerPrice_Score], [ConsumerPrice], [Unemployment_Score], [Unemployment],
-            [ImportCoverMonths_Score], [ImportCoverMonths], [TotalExternalDebtStock_Score], [TotalExternalDebtStock],
-            [ShortTermExternalDebt_Score], [ShortTermExternalDebt], [BudgetBalance_Score], [BudgetBalance],
-            [TotalGovernmentDebt_Score], [TotalGovernmentDebt], [PoliticalRisk_Score], [PoliticalRisk],
-            [SecurityRisk_Score], [SecurityRisk], [BusinessStrategy_Explain], [BusinessStrategy],
-            [CreditRating_Explain], [CreditRating], [Outlook_Explain], [Outlook],
-            [Other_Explain], [Other], [End_Explain], [AssessmentDay]
-        );
-
-		-- 把國家風險等級拉出去
-        WITH RatingText AS (
-			SELECT
-				rt.FK_Country_Id,
-				rt.FinalRating,
-				rt.Score,
-				'第' +
-					CASE rt.FinalRating
-						WHEN 1 THEN '一'
-						WHEN 2 THEN '二'
-						WHEN 3 THEN '三'
-						WHEN 4 THEN '四'
-						WHEN 5 THEN '五'
-					END + '等' AS RatingText,
-				'國家風險等級：第' +
-					CASE rt.FinalRating
-						WHEN 1 THEN '一'
-						WHEN 2 THEN '二'
-						WHEN 3 THEN '三'
-						WHEN 4 THEN '四'
-						WHEN 5 THEN '五'
-					END + '等' AS TitleRatingText,
-				CASE rt.FinalRating
-					WHEN 1 THEN 9
-					WHEN 2 THEN 7
-					WHEN 3 THEN 5
-					WHEN 4 THEN 3
-					WHEN 5 THEN 1
-				END AS RatingScore,
-				CASE rt.Score
-					WHEN 1 THEN '正面'
-					WHEN 0 THEN '持平'
-					WHEN -1 THEN '負面'
-					ELSE NULL
-				END AS OutlookText
-			FROM @CountryRatings rt
-		),
-        -- Default 分數從規則表讀取，ScoreLevel = 'Default' 的那筆
-        DefaultScores AS (
-            SELECT RuleName, Score
-            FROM CreditRating_BmiRule
-            WHERE ScoreLevel = 'Default' AND IsActive = 1
-        ),
-        BMIData AS (
-            SELECT
-                ci.PK_Id AS FK_Country_Id,
-                ci.CountryName_TN,
-                ci.ISIMFAE,
-
-                -- 原始值
-                ROUND(a.BMI_GDP_NOM_USD_AVE / 1000000000, 1) AS NominalGDP,
-                ROUND(a.BMI_GDP_REAL_PCTCH, 1) AS RealGDPGrowth_Raw,
-                ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) AS ConsumerPrice_Raw,
-                a.BMI_LABOUR_UNEMP_PCT_AVE_UNIT AS Unemployment,
-                a.BMI_RESERVES_IMPCOVER AS ImportCoverMonths,
-                ROUND(a.BMI_DEBT_EXT_PCGDP, 1) AS TotalExternalDebtStock,
-                ROUND(a.BMI_DEBT_EXT_ST_PCTEXTDEBT, 1) AS ShortTermExternalDebt,
-                ROUND(a.BMI_FISCAL_BALANCE_PCTGDP, 1) AS BudgetBalance,
-                ROUND(a.BMI_DEBT_GOVT_PCGDP, 1) AS TotalGovernmentDebt,
-                ROUND(a.BMI_INDEX_POLRISK_UNIT_50046_E, 1) AS PoliticalRisk,
-                ROUND(a.BMI_INDEX_POLRISK_SECURITY_UNIT_10012_E, 1) AS SecurityRisk,
-
-                -- 動態評分，找不到規則時用 DefaultScores 的值
-                ISNULL(gdp_rule.Score, gdp_default.Score)                           AS NominalGDP_Score,
-
-                CASE WHEN ci.ISIMFAE = 1 THEN ISNULL(CAST(gdp_growth_dev.Score AS FLOAT),    CAST(gdp_growth_dev_default.Score    AS FLOAT)) ELSE NULL END AS RealGDPGrowthIMFAE_Score,
-                CASE WHEN ci.ISIMFAE = 1 THEN ROUND(a.BMI_GDP_REAL_PCTCH, 1) ELSE NULL END AS RealGDPGrowthIMFAE,
-                CASE WHEN ci.ISIMFAE = 0 THEN ISNULL(CAST(gdp_growth_emerging.Score AS FLOAT), CAST(gdp_growth_emg_default.Score AS FLOAT)) ELSE NULL END AS RealGDPGrowth_Score,
-                CASE WHEN ci.ISIMFAE = 0 THEN ROUND(a.BMI_GDP_REAL_PCTCH, 1) ELSE NULL END AS RealGDPGrowth,
-
-                CASE WHEN ci.ISIMFAE = 1 THEN ISNULL(CAST(cpi_dev.Score AS FLOAT),           CAST(cpi_dev_default.Score           AS FLOAT)) ELSE NULL END AS ConsumerPriceIMFAE_Score,
-                CASE WHEN ci.ISIMFAE = 1 THEN ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) ELSE NULL END AS ConsumerPriceIMFAE,
-                CASE WHEN ci.ISIMFAE = 0 THEN ISNULL(CAST(cpi_emerging.Score AS FLOAT),       CAST(cpi_emg_default.Score           AS FLOAT)) ELSE NULL END AS ConsumerPrice_Score,
-                CASE WHEN ci.ISIMFAE = 0 THEN ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) ELSE NULL END AS ConsumerPrice,
-
-                ISNULL(CAST(unemp_rule.Score    AS FLOAT), CAST(unemp_default.Score    AS FLOAT)) AS Unemployment_Score,
-                ISNULL(CAST(import_rule.Score   AS FLOAT), CAST(import_default.Score   AS FLOAT)) AS ImportCoverMonths_Score,
-                ISNULL(CAST(ext_debt_rule.Score AS FLOAT), CAST(ext_debt_default.Score AS FLOAT)) AS TotalExternalDebtStock_Score,
-                ISNULL(CAST(st_debt_rule.Score  AS FLOAT), CAST(st_debt_default.Score  AS FLOAT)) AS ShortTermExternalDebt_Score,
-                ISNULL(CAST(budget_rule.Score   AS FLOAT), CAST(budget_default.Score   AS FLOAT)) AS BudgetBalance_Score,
-                ISNULL(CAST(govt_debt_rule.Score AS FLOAT), CAST(govt_debt_default.Score AS FLOAT)) AS TotalGovernmentDebt_Score,
-                ISNULL(pol_risk_rule.Score, pol_risk_default.Score)                 AS PoliticalRisk_Score,
-                ISNULL(sec_risk_rule.Score, sec_risk_default.Score)                 AS SecurityRisk_Score,
-
-                ROW_NUMBER() OVER (PARTITION BY ci.PK_Id ORDER BY ISNULL(a.PK_Id, 0) DESC) AS rn
-
-            FROM CountryMaster ci
-            LEFT JOIN CreditRating_Bmi a
-                ON a.FK_Country_Id = ci.PK_Id
-                AND a.Year = YEAR(@Date)
-
-            -- NominalGDP
-            LEFT JOIN CreditRating_BmiRule gdp_rule
-                ON gdp_rule.RuleName = 'NominalGDP'
-                AND gdp_rule.IsActive = 1
-                AND gdp_rule.ScoreLevel <> 'Default'
-                AND ROUND(a.BMI_GDP_NOM_USD_AVE / 1000000000, 1) >= ISNULL(gdp_rule.MinValue, -999999999)
-                AND ROUND(a.BMI_GDP_NOM_USD_AVE / 1000000000, 1) <= ISNULL(gdp_rule.MaxValue, 999999999)
-            LEFT JOIN DefaultScores gdp_default ON gdp_default.RuleName = 'NominalGDP'
-
-            -- RealGDPGrowth (已開發)
-            LEFT JOIN CreditRating_BmiRule gdp_growth_dev
-                ON gdp_growth_dev.RuleName = 'RealGDPGrowthDeveloped'
-                AND gdp_growth_dev.IsActive = 1
-                AND gdp_growth_dev.ScoreLevel <> 'Default'
-                AND ci.ISIMFAE = 1
-                AND ROUND(a.BMI_GDP_REAL_PCTCH, 1) >= ISNULL(gdp_growth_dev.MinValue, -999999999)
-                AND ROUND(a.BMI_GDP_REAL_PCTCH, 1) <= ISNULL(gdp_growth_dev.MaxValue, 999999999)
-            LEFT JOIN DefaultScores gdp_growth_dev_default ON gdp_growth_dev_default.RuleName = 'RealGDPGrowthDeveloped'
-
-            -- RealGDPGrowth (開發中)
-            LEFT JOIN CreditRating_BmiRule gdp_growth_emerging
-                ON gdp_growth_emerging.RuleName = 'RealGDPGrowthDeveloping'
-                AND gdp_growth_emerging.IsActive = 1
-                AND gdp_growth_emerging.ScoreLevel <> 'Default'
-                AND ci.ISIMFAE = 0
-                AND ROUND(a.BMI_GDP_REAL_PCTCH, 1) >= ISNULL(gdp_growth_emerging.MinValue, -999999999)
-                AND ROUND(a.BMI_GDP_REAL_PCTCH, 1) <= ISNULL(gdp_growth_emerging.MaxValue, 999999999)
-            LEFT JOIN DefaultScores gdp_growth_emg_default ON gdp_growth_emg_default.RuleName = 'RealGDPGrowthDeveloping'
-
-            -- ConsumerPrice (已開發)
-            LEFT JOIN CreditRating_BmiRule cpi_dev
-                ON cpi_dev.RuleName = 'ConsumerPriceDeveloped'
-                AND cpi_dev.IsActive = 1
-                AND cpi_dev.ScoreLevel <> 'Default'
-                AND ci.ISIMFAE = 1
-                AND (
-                    (cpi_dev.ScoreLevel = 'Deflation' AND ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) <= 0)
-                    OR (cpi_dev.ScoreLevel <> 'Deflation'
-                        AND ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) > 0
-                        AND ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) >= ISNULL(cpi_dev.MinValue, -999999999)
-                        AND ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) <= ISNULL(cpi_dev.MaxValue, 999999999))
-                )
-            LEFT JOIN DefaultScores cpi_dev_default ON cpi_dev_default.RuleName = 'ConsumerPriceDeveloped'
-
-            -- ConsumerPrice (開發中)
-            LEFT JOIN CreditRating_BmiRule cpi_emerging
-                ON cpi_emerging.RuleName = 'ConsumerPriceDeveloping'
-                AND cpi_emerging.IsActive = 1
-                AND cpi_emerging.ScoreLevel <> 'Default'
-                AND ci.ISIMFAE = 0
-                AND (
-                    (cpi_emerging.ScoreLevel = 'Deflation' AND ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) <= 0)
-                    OR (cpi_emerging.ScoreLevel <> 'Deflation'
-                        AND ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) > 0
-                        AND ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) >= ISNULL(cpi_emerging.MinValue, -999999999)
-                        AND ROUND(a.BMI_INFLATION_CPI_AVE_UNIT, 1) <= ISNULL(cpi_emerging.MaxValue, 999999999))
-                )
-            LEFT JOIN DefaultScores cpi_emg_default ON cpi_emg_default.RuleName = 'ConsumerPriceDeveloping'
-
-            -- Unemployment
-            LEFT JOIN CreditRating_BmiRule unemp_rule
-                ON unemp_rule.RuleName = 'Unemployment'
-                AND unemp_rule.IsActive = 1
-                AND unemp_rule.ScoreLevel <> 'Default'
-                AND a.BMI_LABOUR_UNEMP_PCT_AVE_UNIT >= ISNULL(unemp_rule.MinValue, -999999999)
-                AND a.BMI_LABOUR_UNEMP_PCT_AVE_UNIT <= ISNULL(unemp_rule.MaxValue, 999999999)
-            LEFT JOIN DefaultScores unemp_default ON unemp_default.RuleName = 'Unemployment'
-
-            -- ImportCoverMonths
-            LEFT JOIN CreditRating_BmiRule import_rule
-                ON import_rule.RuleName = 'ImportCoverMonths'
-                AND import_rule.IsActive = 1
-                AND import_rule.ScoreLevel <> 'Default'
-                AND a.BMI_RESERVES_IMPCOVER >= ISNULL(import_rule.MinValue, -999999999)
-                AND a.BMI_RESERVES_IMPCOVER <= ISNULL(import_rule.MaxValue, 999999999)
-            LEFT JOIN DefaultScores import_default ON import_default.RuleName = 'ImportCoverMonths'
-
-            -- TotalExternalDebtStock
-            LEFT JOIN CreditRating_BmiRule ext_debt_rule
-                ON ext_debt_rule.RuleName = 'TotalExternalDebtStock'
-                AND ext_debt_rule.IsActive = 1
-                AND ext_debt_rule.ScoreLevel <> 'Default'
-                AND ROUND(a.BMI_DEBT_EXT_PCGDP, 1) >= ISNULL(ext_debt_rule.MinValue, -999999999)
-                AND ROUND(a.BMI_DEBT_EXT_PCGDP, 1) <= ISNULL(ext_debt_rule.MaxValue, 999999999)
-            LEFT JOIN DefaultScores ext_debt_default ON ext_debt_default.RuleName = 'TotalExternalDebtStock'
-
-            -- ShortTermExternalDebt
-            LEFT JOIN CreditRating_BmiRule st_debt_rule
-                ON st_debt_rule.RuleName = 'ShortTermExternalDebt'
-                AND st_debt_rule.IsActive = 1
-                AND st_debt_rule.ScoreLevel <> 'Default'
-                AND ROUND(a.BMI_DEBT_EXT_ST_PCTEXTDEBT, 1) >= ISNULL(st_debt_rule.MinValue, -999999999)
-                AND ROUND(a.BMI_DEBT_EXT_ST_PCTEXTDEBT, 1) <= ISNULL(st_debt_rule.MaxValue, 999999999)
-            LEFT JOIN DefaultScores st_debt_default ON st_debt_default.RuleName = 'ShortTermExternalDebt'
-
-            -- BudgetBalance
-            LEFT JOIN CreditRating_BmiRule budget_rule
-                ON budget_rule.RuleName = 'BudgetBalance'
-                AND budget_rule.IsActive = 1
-                AND budget_rule.ScoreLevel <> 'Default'
-                AND ROUND(a.BMI_FISCAL_BALANCE_PCTGDP, 1) >= ISNULL(budget_rule.MinValue, -999999999)
-                AND ROUND(a.BMI_FISCAL_BALANCE_PCTGDP, 1) <= ISNULL(budget_rule.MaxValue, 999999999)
-            LEFT JOIN DefaultScores budget_default ON budget_default.RuleName = 'BudgetBalance'
-
-            -- TotalGovernmentDebt
-            LEFT JOIN CreditRating_BmiRule govt_debt_rule
-                ON govt_debt_rule.RuleName = 'TotalGovernmentDebt'
-                AND govt_debt_rule.IsActive = 1
-                AND govt_debt_rule.ScoreLevel <> 'Default'
-                AND ROUND(a.BMI_DEBT_GOVT_PCGDP, 1) >= ISNULL(govt_debt_rule.MinValue, -999999999)
-                AND ROUND(a.BMI_DEBT_GOVT_PCGDP, 1) <= ISNULL(govt_debt_rule.MaxValue, 999999999)
-            LEFT JOIN DefaultScores govt_debt_default ON govt_debt_default.RuleName = 'TotalGovernmentDebt'
-
-            -- PoliticalRisk
-            LEFT JOIN CreditRating_BmiRule pol_risk_rule
-                ON pol_risk_rule.RuleName = 'PoliticalRisk'
-                AND pol_risk_rule.IsActive = 1
-                AND pol_risk_rule.ScoreLevel <> 'Default'
-                AND ROUND(a.BMI_INDEX_POLRISK_UNIT_50046_E, 1) >= ISNULL(pol_risk_rule.MinValue, -999999999)
-                AND ROUND(a.BMI_INDEX_POLRISK_UNIT_50046_E, 1) <= ISNULL(pol_risk_rule.MaxValue, 999999999)
-            LEFT JOIN DefaultScores pol_risk_default ON pol_risk_default.RuleName = 'PoliticalRisk'
-
-            -- SecurityRisk
-            LEFT JOIN CreditRating_BmiRule sec_risk_rule
-                ON sec_risk_rule.RuleName = 'SecurityRisk'
-                AND sec_risk_rule.IsActive = 1
-                AND sec_risk_rule.ScoreLevel <> 'Default'
-                AND ROUND(a.BMI_INDEX_POLRISK_SECURITY_UNIT_10012_E, 1) >= ISNULL(sec_risk_rule.MinValue, -999999999)
-                AND ROUND(a.BMI_INDEX_POLRISK_SECURITY_UNIT_10012_E, 1) <= ISNULL(sec_risk_rule.MaxValue, 999999999)
-            LEFT JOIN DefaultScores sec_risk_default ON sec_risk_default.RuleName = 'SecurityRisk'
-        )
-        INSERT INTO CreditRating_CountBmi (
-            FK_Country_Id, CountryName, CountryRating, TitleCountryRating,
-            NominalGDP_Score, NominalGDP,
-            RealGDPGrowthIMFAE_Score, RealGDPGrowthIMFAE,
-            RealGDPGrowth_Score, RealGDPGrowth,
-            ConsumerPriceIMFAE_Score, ConsumerPriceIMFAE,
-            ConsumerPrice_Score, ConsumerPrice,
-            Unemployment_Score, Unemployment,
-            ImportCoverMonths_Score, ImportCoverMonths,
-            TotalExternalDebtStock_Score, TotalExternalDebtStock,
-            ShortTermExternalDebt_Score, ShortTermExternalDebt,
-            BudgetBalance_Score, BudgetBalance,
-            TotalGovernmentDebt_Score, TotalGovernmentDebt,
-            PoliticalRisk_Score, PoliticalRisk,
-            SecurityRisk_Score, SecurityRisk,
-            BusinessStrategy_Explain, BusinessStrategy,
-            CreditRating_Explain, CreditRating,
-            Outlook_Explain, Outlook,
-            Other_Explain, Other,
-            End_Explain, AssessmentDay
-        )
-        SELECT
-            cm.PK_Id AS FK_Country_Id,
-            CONCAT('國家：', ISNULL(bd.CountryName_TN, cm.CountryName_TN)) AS CountryName,
-            ISNULL(rt.FinalRating, 5) AS CountryRating,
-            ISNULL(rt.TitleRatingText, '國家風險等級：第五等') AS TitleCountryRating,
-            bd.NominalGDP_Score,
-            bd.NominalGDP,
-            bd.RealGDPGrowthIMFAE_Score,
-            bd.RealGDPGrowthIMFAE,
-            bd.RealGDPGrowth_Score,
-            bd.RealGDPGrowth,
-            bd.ConsumerPriceIMFAE_Score,
-            bd.ConsumerPriceIMFAE,
-            bd.ConsumerPrice_Score,
-            bd.ConsumerPrice,
-            bd.Unemployment_Score,
-            bd.Unemployment,
-            bd.ImportCoverMonths_Score,
-            bd.ImportCoverMonths,
-            bd.TotalExternalDebtStock_Score,
-            bd.TotalExternalDebtStock,
-            bd.ShortTermExternalDebt_Score,
-            bd.ShortTermExternalDebt,
-            bd.BudgetBalance_Score,
-            bd.BudgetBalance,
-            bd.TotalGovernmentDebt_Score,
-            bd.TotalGovernmentDebt,
-            bd.PoliticalRisk_Score,
-            bd.PoliticalRisk,
-            bd.SecurityRisk_Score,
-            bd.SecurityRisk,
-            NULL AS BusinessStrategy_Explain,
-            NULL AS BusinessStrategy,
-            ISNULL(rt.RatingText, '第五等') AS CreditRating_Explain,
-            ISNULL(rt.RatingScore, 1) AS CreditRating,
-            ISNULL(rt.OutlookText, '持平') AS Outlook_Explain,
-            ISNULL(rt.Score, 0) AS Outlook,
-            NULL AS Other_Explain,
-            NULL AS Other,
-            CONCAT(ISNULL(bd.CountryName_TN, cm.CountryName_TN), '國家風險額度獲配___百萬美元，本次擬申請增加___百萬美元。') AS End_Explain,
-            '評定日：' + FORMAT(@Date, 'yyyyMMdd') AS AssessmentDay
-        FROM CountryMaster cm
-        LEFT JOIN RatingText rt ON cm.PK_Id = rt.FK_Country_Id
-        LEFT JOIN BMIData bd ON cm.PK_Id = bd.FK_Country_Id AND bd.rn = 1;
-
-
-    END TRY
-    BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        DECLARE @ErrorLine INT = ERROR_LINE();
-        PRINT '處理失敗於第 ' + CAST(@ErrorLine AS VARCHAR) + ' 行: ' + @ErrorMessage;
         THROW;
     END CATCH
 END
@@ -14395,4 +15735,7 @@ GO
 COMMIT TRANSACTION;
 GO
 PRINT N'EF-managed table and module schema deployment completed.';
+GO
+-- Restore the session setting when preflight used NOEXEC to halt deployment.
+SET NOEXEC OFF;
 GO
