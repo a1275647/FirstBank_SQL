@@ -20,7 +20,7 @@ CREATE TABLE [dbo].[OSFXKF02_MF](
 	[OSFXKF02_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[OSFXKF02_MF] ADD  CONSTRAINT [DF_OSFXKF02_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO

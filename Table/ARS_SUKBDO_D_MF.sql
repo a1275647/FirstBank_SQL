@@ -17,7 +17,7 @@ CREATE TABLE [dbo].[ARS_SUKBDO_D_MF](
 	[SUKBDO_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKBDO_D_MF] ADD  CONSTRAINT [DF_ARS_SUKBDO_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO

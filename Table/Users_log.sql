@@ -25,7 +25,7 @@ CREATE TABLE [dbo].[Users_log](
 	[Update_User] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Memo] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SysCreateDate] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[Users_log] ADD  CONSTRAINT [DF_Users_his_IsActive]  DEFAULT ((0)) FOR [IsActive]
 GO

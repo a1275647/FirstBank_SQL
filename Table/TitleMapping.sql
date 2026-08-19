@@ -6,5 +6,5 @@ CREATE TABLE [dbo].[TitleMapping](
 	[TitleCode] [nvarchar](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[TitleId] [int] NULL,
 	[TitleName] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL
-)
+) ON [NCRMS_TAB]
 GO

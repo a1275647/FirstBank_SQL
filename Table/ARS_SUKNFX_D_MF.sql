@@ -19,7 +19,7 @@ CREATE TABLE [dbo].[ARS_SUKNFX_D_MF](
 	[SUKFX_CUR_SOLD] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[SUKFX_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKNFX_D_MF] ADD  CONSTRAINT [DF_ARS_SUKNFX_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO

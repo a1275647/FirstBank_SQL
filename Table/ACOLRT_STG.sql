@@ -11,7 +11,7 @@ CREATE TABLE [dbo].[ACOLRT_STG](
 	[ACOLRT_EXT_DATE] [date] NULL,
 	[ACOLRT_LOAD_DATE] [datetime] NULL,
 	[Create_Date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ACOLRT_STG] ADD  CONSTRAINT [DF_ACOLRT_STG_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO

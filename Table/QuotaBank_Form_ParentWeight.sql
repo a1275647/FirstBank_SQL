@@ -12,8 +12,8 @@ CREATE TABLE [dbo].[QuotaBank_Form_ParentWeight](
  CONSTRAINT [PK_QuotaBank_Form_ParentWeight] PRIMARY KEY CLUSTERED
 (
 	[PK_Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
-)
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]
 GO
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'暫存資料識別碼（流水號）' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'QuotaBank_Form_ParentWeight', @level2type=N'COLUMN',@level2name=N'PK_Id'
 GO

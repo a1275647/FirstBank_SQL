@@ -12,5 +12,5 @@ CREATE TABLE [dbo].[LS_LSRSA_D_MF](
 	[COUNTRY] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL
-)
+) ON [NCRMS_TAB]
 GO

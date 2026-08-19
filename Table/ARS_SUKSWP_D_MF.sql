@@ -17,7 +17,7 @@ CREATE TABLE [dbo].[ARS_SUKSWP_D_MF](
 	[SUKSWP_RISK_AMT] [decimal](17, 2) NULL,
 	[SUKSWP_EXT_DATE] [date] NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[ARS_SUKSWP_D_MF] ADD  CONSTRAINT [DF_ARS_SUKSWP_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO

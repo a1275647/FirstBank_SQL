@@ -22,7 +22,7 @@ CREATE TABLE [dbo].[FL_FLMST_D_MF](
 	[FLMST_FINAL_RISK_CNTY] [nvarchar](4) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_Date] [date] NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FL_FLMST_D_MF] ADD  CONSTRAINT [DF_FL_FLMST_D_MF_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO

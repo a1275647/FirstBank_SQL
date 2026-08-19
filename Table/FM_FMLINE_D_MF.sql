@@ -18,7 +18,7 @@ CREATE TABLE [dbo].[FM_FMLINE_D_MF](
 	[FMLINE_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_Date] [date] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 ALTER TABLE [dbo].[FM_FMLINE_D_MF] ADD  CONSTRAINT [DF_FM_FMLINE_D_MF_Create_Date]  DEFAULT (getdate()) FOR [Create_Date]
 GO

@@ -15,7 +15,7 @@ CREATE TABLE [dbo].[OS_LNSLNKD_D_MF](
 	[LNSLNKD_LOAD_DATE] [date] NULL,
 	[LNSLNKD_LOAD_TIME] [char](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-)
+) ON [NCRMS_TAB]
 GO
 SET ANSI_PADDING OFF
 GO
