@@ -548,8 +548,6 @@ DROP TABLE IF EXISTS [dbo].[UserTextLibrary];
 GO
 DROP TABLE IF EXISTS [dbo].[Users_log];
 GO
-DROP TABLE IF EXISTS [dbo].[Users];
-GO
 DROP TABLE IF EXISTS [dbo].[TitleMapping];
 GO
 DROP TABLE IF EXISTS [dbo].[Title];
@@ -588,8 +586,6 @@ DROP TABLE IF EXISTS [dbo].[RPA_Source];
 GO
 DROP TABLE IF EXISTS [dbo].[RPA_his];
 GO
-DROP TABLE IF EXISTS [dbo].[RPA];
-GO
 DROP TABLE IF EXISTS [dbo].[Role_User_Mapping_his];
 GO
 DROP TABLE IF EXISTS [dbo].[Role_User_Mapping];
@@ -597,10 +593,6 @@ GO
 DROP TABLE IF EXISTS [dbo].[Role_Position_Mapping_his];
 GO
 DROP TABLE IF EXISTS [dbo].[Role_Position_Mapping];
-GO
-DROP TABLE IF EXISTS [dbo].[Role_his];
-GO
-DROP TABLE IF EXISTS [dbo].[Role];
 GO
 DROP TABLE IF EXISTS [dbo].[RiskLineO];
 GO
@@ -628,12 +620,6 @@ DROP TABLE IF EXISTS [dbo].[QuotaBank_Weight];
 GO
 DROP TABLE IF EXISTS [dbo].[QuotaBank_M_Week];
 GO
-DROP TABLE IF EXISTS [dbo].[QuotaBank_M_temp];
-GO
-DROP TABLE IF EXISTS [dbo].[QuotaBank_M_his];
-GO
-DROP TABLE IF EXISTS [dbo].[QuotaBank_M_Form_AllData];
-GO
 DROP TABLE IF EXISTS [dbo].[QuotaBank_M];
 GO
 DROP TABLE IF EXISTS [dbo].[QuotaBank_Form_ParentWeight];
@@ -641,12 +627,6 @@ GO
 DROP TABLE IF EXISTS [dbo].[QuotaBank_Form_Data];
 GO
 DROP TABLE IF EXISTS [dbo].[QuotaBank_D_Week];
-GO
-DROP TABLE IF EXISTS [dbo].[QuotaBank_D_temp];
-GO
-DROP TABLE IF EXISTS [dbo].[QuotaBank_D_his];
-GO
-DROP TABLE IF EXISTS [dbo].[QuotaBank_D_Form_AllData];
 GO
 DROP TABLE IF EXISTS [dbo].[QuotaBank_D];
 GO
@@ -671,8 +651,6 @@ GO
 DROP TABLE IF EXISTS [dbo].[Post_temp];
 GO
 DROP TABLE IF EXISTS [dbo].[Post_his];
-GO
-DROP TABLE IF EXISTS [dbo].[Post];
 GO
 DROP TABLE IF EXISTS [dbo].[Permissions_Query_his];
 GO
@@ -706,8 +684,6 @@ DROP TABLE IF EXISTS [dbo].[OldData_Quota];
 GO
 DROP TABLE IF EXISTS [dbo].[NoticeUser];
 GO
-DROP TABLE IF EXISTS [dbo].[Notice];
-GO
 DROP TABLE IF EXISTS [dbo].[NewsFileMapping_temp];
 GO
 DROP TABLE IF EXISTS [dbo].[NewsFileMapping_his];
@@ -726,8 +702,6 @@ DROP TABLE IF EXISTS [dbo].[News_temp];
 GO
 DROP TABLE IF EXISTS [dbo].[News_his];
 GO
-DROP TABLE IF EXISTS [dbo].[News];
-GO
 DROP TABLE IF EXISTS [dbo].[MONITORDATA_temp];
 GO
 DROP TABLE IF EXISTS [dbo].[MONITORDATA_his];
@@ -735,8 +709,6 @@ GO
 DROP TABLE IF EXISTS [dbo].[MONITORDATA];
 GO
 DROP TABLE IF EXISTS [dbo].[MIS_CRCY_REF];
-GO
-DROP TABLE IF EXISTS [dbo].[Menu];
 GO
 DROP TABLE IF EXISTS [dbo].[MailToMapping_temp];
 GO
@@ -758,8 +730,6 @@ DROP TABLE IF EXISTS [dbo].[MailLog_CcGroupMapping];
 GO
 DROP TABLE IF EXISTS [dbo].[MailLog_CcCustomMapping];
 GO
-DROP TABLE IF EXISTS [dbo].[MailLog];
-GO
 DROP TABLE IF EXISTS [dbo].[MailGroupUser];
 GO
 DROP TABLE IF EXISTS [dbo].[MailGroupMapping_temp];
@@ -773,8 +743,6 @@ GO
 DROP TABLE IF EXISTS [dbo].[MailGroupCcMapping_his];
 GO
 DROP TABLE IF EXISTS [dbo].[MailGroupCcMapping];
-GO
-DROP TABLE IF EXISTS [dbo].[MailGroup];
 GO
 DROP TABLE IF EXISTS [dbo].[MailCustomToMapping_temp];
 GO
@@ -794,19 +762,13 @@ DROP TABLE IF EXISTS [dbo].[MailCcMapping_his];
 GO
 DROP TABLE IF EXISTS [dbo].[MailCcMapping];
 GO
-DROP TABLE IF EXISTS [dbo].[Mail_temp];
-GO
 DROP TABLE IF EXISTS [dbo].[Mail_his];
-GO
-DROP TABLE IF EXISTS [dbo].[Mail];
 GO
 DROP TABLE IF EXISTS [dbo].[LS_LSRSA_D_MF];
 GO
 DROP TABLE IF EXISTS [dbo].[LoanMainUnitData];
 GO
 DROP TABLE IF EXISTS [dbo].[LoanExtApp];
-GO
-DROP TABLE IF EXISTS [dbo].[LoanBranchData];
 GO
 DROP TABLE IF EXISTS [dbo].[LoanBranchApproveAmountHis];
 GO
@@ -824,8 +786,6 @@ DROP TABLE IF EXISTS [dbo].[HRIS_Origin];
 GO
 DROP TABLE IF EXISTS [dbo].[GroupIdCounter];
 GO
-DROP TABLE IF EXISTS [dbo].[Global];
-GO
 DROP TABLE IF EXISTS [dbo].[FPEXR_STG];
 GO
 DROP TABLE IF EXISTS [dbo].[ForexRate];
@@ -834,27 +794,15 @@ DROP TABLE IF EXISTS [dbo].[FM_FMLINE_D_MF];
 GO
 DROP TABLE IF EXISTS [dbo].[FlowUserReset];
 GO
-DROP TABLE IF EXISTS [dbo].[FlowRecord];
-GO
 DROP TABLE IF EXISTS [dbo].[FlowModifyRecord];
 GO
-DROP TABLE IF EXISTS [dbo].[FlowForm_LoanMain];
-GO
-DROP TABLE IF EXISTS [dbo].[FlowForm];
-GO
 DROP TABLE IF EXISTS [dbo].[FlowFileMapping];
-GO
-DROP TABLE IF EXISTS [dbo].[FlowDetail];
-GO
-DROP TABLE IF EXISTS [dbo].[Flow];
 GO
 DROP TABLE IF EXISTS [dbo].[FL_FLMST_D_MF];
 GO
 DROP TABLE IF EXISTS [dbo].[FinancialRiskFactorPeriodDay_temp];
 GO
 DROP TABLE IF EXISTS [dbo].[FinancialRiskFactorPeriodDay_his];
-GO
-DROP TABLE IF EXISTS [dbo].[FinancialRiskFactorPeriodDay];
 GO
 DROP TABLE IF EXISTS [dbo].[FinancialRiskFactorData_temp];
 GO
@@ -866,13 +814,7 @@ DROP TABLE IF EXISTS [dbo].[FinancialProductMaster_temp];
 GO
 DROP TABLE IF EXISTS [dbo].[FinancialProductMaster_his];
 GO
-DROP TABLE IF EXISTS [dbo].[FinancialProductMaster];
-GO
 DROP TABLE IF EXISTS [dbo].[FileCenter_Downloads];
-GO
-DROP TABLE IF EXISTS [dbo].[FileCenter];
-GO
-DROP TABLE IF EXISTS [dbo].[FeatureDetail];
 GO
 DROP TABLE IF EXISTS [dbo].[ExcelTemplate];
 GO
@@ -883,8 +825,6 @@ GO
 DROP TABLE IF EXISTS [dbo].[Customer_his];
 GO
 DROP TABLE IF EXISTS [dbo].[Customer];
-GO
-DROP TABLE IF EXISTS [dbo].[CreditRatingMaster];
 GO
 DROP TABLE IF EXISTS [dbo].[CreditRating_Token];
 GO
@@ -934,13 +874,9 @@ DROP TABLE IF EXISTS [dbo].[CountryOutlookReport_Source];
 GO
 DROP TABLE IF EXISTS [dbo].[CountryOutlookReport_his];
 GO
-DROP TABLE IF EXISTS [dbo].[CountryOutlookReport];
-GO
 DROP TABLE IF EXISTS [dbo].[CountryMaster_temp];
 GO
 DROP TABLE IF EXISTS [dbo].[CountryMaster_his];
-GO
-DROP TABLE IF EXISTS [dbo].[CountryMaster];
 GO
 DROP TABLE IF EXISTS [dbo].[CountryForexRateMapping];
 GO
@@ -956,17 +892,9 @@ DROP TABLE IF EXISTS [dbo].[CountryExceptionBankGroup_his];
 GO
 DROP TABLE IF EXISTS [dbo].[CountryExceptionBankGroup];
 GO
-DROP TABLE IF EXISTS [dbo].[CountryException_temp];
-GO
 DROP TABLE IF EXISTS [dbo].[CountryException_his];
 GO
-DROP TABLE IF EXISTS [dbo].[CountryException];
-GO
-DROP TABLE IF EXISTS [dbo].[ContinentMaster_temp];
-GO
 DROP TABLE IF EXISTS [dbo].[ContinentMaster_his];
-GO
-DROP TABLE IF EXISTS [dbo].[ContinentMaster];
 GO
 DROP TABLE IF EXISTS [dbo].[ContinentCountry_temp];
 GO
@@ -977,8 +905,6 @@ GO
 DROP TABLE IF EXISTS [dbo].[CDS];
 GO
 DROP TABLE IF EXISTS [dbo].[BankYearNeWorthBase_Week];
-GO
-DROP TABLE IF EXISTS [dbo].[BankYearNeWorthBase_temp];
 GO
 DROP TABLE IF EXISTS [dbo].[BankYearNeWorthBase_his];
 GO
@@ -1017,6 +943,80 @@ GO
 DROP TABLE IF EXISTS [dbo].[ACOLRT_STG];
 GO
 DROP TABLE IF EXISTS [dbo].[ACNOD_STG];
+GO
+DROP TABLE IF EXISTS [dbo].[Users];
+GO
+DROP TABLE IF EXISTS [dbo].[RPA];
+GO
+DROP TABLE IF EXISTS [dbo].[Role_his];
+GO
+DROP TABLE IF EXISTS [dbo].[Role];
+GO
+DROP TABLE IF EXISTS [dbo].[QuotaBank_D_temp];
+GO
+DROP TABLE IF EXISTS [dbo].[QuotaBank_D_his];
+GO
+DROP TABLE IF EXISTS [dbo].[QuotaBank_D_Form_AllData];
+GO
+DROP TABLE IF EXISTS [dbo].[Post];
+GO
+DROP TABLE IF EXISTS [dbo].[Notice];
+GO
+DROP TABLE IF EXISTS [dbo].[News];
+GO
+DROP TABLE IF EXISTS [dbo].[MailLog];
+GO
+DROP TABLE IF EXISTS [dbo].[MailGroup];
+GO
+DROP TABLE IF EXISTS [dbo].[Mail_temp];
+GO
+DROP TABLE IF EXISTS [dbo].[Mail];
+GO
+DROP TABLE IF EXISTS [dbo].[LoanBranchData];
+GO
+DROP TABLE IF EXISTS [dbo].[Global];
+GO
+DROP TABLE IF EXISTS [dbo].[FlowRecord];
+GO
+DROP TABLE IF EXISTS [dbo].[FinancialRiskFactorPeriodDay];
+GO
+DROP TABLE IF EXISTS [dbo].[FinancialProductMaster];
+GO
+DROP TABLE IF EXISTS [dbo].[FileCenter];
+GO
+DROP TABLE IF EXISTS [dbo].[FeatureDetail];
+GO
+DROP TABLE IF EXISTS [dbo].[CreditRatingMaster];
+GO
+DROP TABLE IF EXISTS [dbo].[CountryOutlookReport];
+GO
+DROP TABLE IF EXISTS [dbo].[CountryMaster];
+GO
+DROP TABLE IF EXISTS [dbo].[CountryException_temp];
+GO
+DROP TABLE IF EXISTS [dbo].[CountryException];
+GO
+DROP TABLE IF EXISTS [dbo].[ContinentMaster_temp];
+GO
+DROP TABLE IF EXISTS [dbo].[BankYearNeWorthBase_temp];
+GO
+DROP TABLE IF EXISTS [dbo].[QuotaBank_M_temp];
+GO
+DROP TABLE IF EXISTS [dbo].[QuotaBank_M_his];
+GO
+DROP TABLE IF EXISTS [dbo].[QuotaBank_M_Form_AllData];
+GO
+DROP TABLE IF EXISTS [dbo].[FlowForm_LoanMain];
+GO
+DROP TABLE IF EXISTS [dbo].[FlowDetail];
+GO
+DROP TABLE IF EXISTS [dbo].[ContinentMaster];
+GO
+DROP TABLE IF EXISTS [dbo].[FlowForm];
+GO
+DROP TABLE IF EXISTS [dbo].[Flow];
+GO
+DROP TABLE IF EXISTS [dbo].[Menu];
 GO
 SET ANSI_NULLS ON
 GO
