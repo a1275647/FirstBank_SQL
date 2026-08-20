@@ -19,6 +19,9 @@ RETURN
 										 SELECT CONVERT(DATE,value)
 										 FROM string_split(@Dates,',')
 										 where LTRIM(RTRIM(value)) <> '')
+			-- 排除已標記資料，跟 QueryMonitorDataBase（C# 端）的 Mark 過濾邏輯一致；
+			-- NULL 視同未標記予以保留，只有明確 1（已標記）才排除。
+			AND ISNULL(Mark,0) <> 1
 	),
 	-- 相同額度 分行 核准編號 轉檔日期  核准額度只算一次 第一筆要給值 其他給0
 	temp2 as (
