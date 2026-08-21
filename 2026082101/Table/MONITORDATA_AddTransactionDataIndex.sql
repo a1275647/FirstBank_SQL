@@ -1,0 +1,51 @@
+SET NOCOUNT ON;
+SET XACT_ABORT ON;
+
+IF OBJECT_ID(N'[dbo].[MONITORDATA]', N'U') IS NULL
+    THROW 51300, N'缺少資料表 dbo.MONITORDATA。', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM sys.indexes
+    WHERE [object_id] = OBJECT_ID(N'[dbo].[MONITORDATA]')
+      AND [name] = N'IX_MONITORDATA_EXTDATE_MARK_UNIT'
+)
+    THROW 51301, N'dbo.MONITORDATA 已存在索引 IX_MONITORDATA_EXTDATE_MARK_UNIT，請先確認是否已執行過本腳本。', 1;
+
+-- 全行額度／產品別／產業別三支動態查詢的交易明細（DimensionService.GetTransactionDataQuery
+-- 及其呼叫端）皆以 EXT_DATE + Mark 過濾，並以 GROUP_NO/UNIT_NO/BRANCH_NO 三欄 OR 篩選權限
+-- 單位。既有索引 IX_MONITORDATA_ASOFDATE_MARK、IX_MONITORDATA_ASOFDATE_PAGING 領頭欄位是
+-- AS_OF_DATE，跟這三支查詢用的 EXT_DATE 對不起來；唯一領頭 EXT_DATE 的 IX_MONITORDATA_DATE
+-- 又沒有 INCLUDE 查詢或顯示所需欄位。缺乏對齊的索引，加上 ToPagedResponseAsync 對同一查詢
+-- 執行兩次（CountAsync 一次、Skip/Take/ToListAsync 再一次），是三支交易明細分頁查詢緩慢的
+-- 主因。這裡新增一個以 EXT_DATE、Mark 為鍵、涵蓋過濾與投影欄位的 covering index。
+--
+-- 注意：MONITORDATA 為大型交易明細表，本索引建置預設離線（ONLINE = OFF），執行期間會鎖表，
+-- 建議於離峰維護時段執行，並先評估預估建置時間。
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    CREATE NONCLUSTERED INDEX [IX_MONITORDATA_EXTDATE_MARK_UNIT] ON [dbo].[MONITORDATA]
+    (
+        [EXT_DATE] ASC,
+        [Mark] ASC
+    )
+    INCLUDE
+    (
+        [GROUP_NO],[UNIT_NO],[BRANCH_NO],
+        [COUNTRY_COD],[PRODUCT_TYPE],[PRODUCT_CODE],[TRAN_NO],[TX_DATE],[PERMIT_NO],
+        [CUSTOMER_ID],[CUSTOMER_NAME],[TO_USD_AMT],[TO_USD_LIMIT],[TRAN_AMOUNT],
+        [CURENCY_COD],[LIMIT],[LIMIT_COD],[AS_OF_DATE],[MATURITY_DATE],[LIMIT_MATURITY],
+        [RISKFACTOR],[INDUSTRY],[INDUSTRY_Type],[WEIGHTS],[CUR_BOUGHT],[CUR_SOLD],
+        [TRAN_FXRATE],[LIMIT_FXRATE],[CAL_TO_USD_AMT],[CAL_TO_USD_LIMIT]
+    )
+    WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX];
+
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF XACT_STATE() <> 0
+        ROLLBACK TRANSACTION;
+    THROW;
+END CATCH;
