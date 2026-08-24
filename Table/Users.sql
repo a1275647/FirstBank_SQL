@@ -6,7 +6,7 @@ GO
 DECLARE @FilegroupSql nvarchar(max) = N'';
 SET @FilegroupSql += N'CREATE TABLE [dbo].[Users](
 	[UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
-	[UserName] [nvarchar](20) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
+	[UserName] [nvarchar](255) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Email] [nvarchar](50) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[GroupCode] [nvarchar](5) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[UnitCode] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
