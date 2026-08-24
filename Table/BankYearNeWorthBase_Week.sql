@@ -2,7 +2,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[BankYearNeWorthBase_Week](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[BankYearNeWorthBase_Week](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[Year] [int] NOT NULL,
 	[Month] [int] NOT NULL,
@@ -25,14 +27,22 @@ CREATE TABLE [dbo].[BankYearNeWorthBase_Week](
 (
 	[PK_Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
-) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
-CREATE NONCLUSTERED INDEX [IX_BankYearNeWorthBase_Week] ON [dbo].[BankYearNeWorthBase_Week]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE NONCLUSTERED INDEX [IX_BankYearNeWorthBase_Week] ON [dbo].[BankYearNeWorthBase_Week]
 (
 	[Year] ASC,
 	[Month] ASC,
 	[Week] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[BankYearNeWorthBase_Week] ADD  CONSTRAINT [DF_BankYearNeWorthBase_Week_Year]  DEFAULT (datepart(year,getdate())) FOR [Year]
 GO

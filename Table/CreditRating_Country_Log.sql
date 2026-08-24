@@ -2,7 +2,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[CreditRating_Country_Log](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[CreditRating_Country_Log](
 	[PK_Id] [int] IDENTITY(1,1) NOT NULL,
 	[FK_CountryId] [int] NOT NULL,
 	[Score] [int] NOT NULL,
@@ -17,7 +19,12 @@ CREATE TABLE [dbo].[CreditRating_Country_Log](
 	[FK_CountryId] ASC,
 	[BusinessDate] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
-) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[CreditRating_Country_Log]  WITH CHECK ADD  CONSTRAINT [FK_CreditRating_Country_Log_CountryMaster] FOREIGN KEY([FK_CountryId])
 REFERENCES [dbo].[CountryMaster] ([PK_Id])

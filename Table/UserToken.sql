@@ -2,7 +2,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[UserToken](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[UserToken](
 	[PK_ID] [int] IDENTITY(1,1) NOT NULL,
 	[UserId] [nvarchar](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[Token] [nvarchar](100) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
@@ -15,14 +17,22 @@ CREATE TABLE [dbo].[UserToken](
 (
 	[PK_ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
-) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING ON
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_UserToken] ON [dbo].[UserToken]
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE UNIQUE NONCLUSTERED INDEX [IX_UserToken] ON [dbo].[UserToken]
 (
 	[Token] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX]';
+IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[UserToken] ADD  CONSTRAINT [DF_UserToken_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO

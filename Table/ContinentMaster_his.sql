@@ -2,7 +2,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[ContinentMaster_his](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[ContinentMaster_his](
 	[Log_id] [int] IDENTITY(1,1) NOT NULL,
 	[LogType] [nvarchar](10) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
 	[FlowFormId] [int] NULL,
@@ -25,7 +27,10 @@ CREATE TABLE [dbo].[ContinentMaster_his](
 (
 	[Log_id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_TAB]
-) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[ContinentMaster_his] ADD  CONSTRAINT [DF__Continent__Conti__0A7E65A1]  DEFAULT ('') FOR [ContinentCode]
 GO

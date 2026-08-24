@@ -2,7 +2,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[OS_LNSMSTD_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OS_LNSMSTD_D_MF](
 	[LNSMSTD_STATUS] [nvarchar](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSMSTD_BRANCH_NO] [nvarchar](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSMSTD_TX_TYPE] [nvarchar](2) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -19,7 +21,10 @@ CREATE TABLE [dbo].[OS_LNSMSTD_D_MF](
 	[LNSMSTD_EXT_DATE] [date] NULL,
 	[BUSINS_CODE] [nvarchar](7) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 ALTER TABLE [dbo].[OS_LNSMSTD_D_MF] ADD  CONSTRAINT [DF_OS_LNSMSTD_D_MF_Create_date]  DEFAULT (getdate()) FOR [Create_date]
 GO

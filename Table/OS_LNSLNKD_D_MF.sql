@@ -4,7 +4,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_PADDING ON
 GO
-CREATE TABLE [dbo].[OS_LNSLNKD_D_MF](
+-- Resolve optional named filegroups at execution time; PRIMARY is the portable fallback.
+DECLARE @FilegroupSql nvarchar(max) = N'';
+SET @FilegroupSql += N'CREATE TABLE [dbo].[OS_LNSLNKD_D_MF](
 	[LNSLNKD_BRANCH_NO] [char](3) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSLNKD_DEPT_NO] [char](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[LNSLNKD_LINE_NO] [char](13) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
@@ -15,7 +17,10 @@ CREATE TABLE [dbo].[OS_LNSLNKD_D_MF](
 	[LNSLNKD_LOAD_DATE] [date] NULL,
 	[LNSLNKD_LOAD_TIME] [char](8) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[Create_date] [datetime] NOT NULL
-) ON [NCRMS_TAB]
+) ON [NCRMS_TAB]';
+IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+    SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+EXEC sys.sp_executesql @FilegroupSql;
 GO
 SET ANSI_PADDING OFF
 GO
