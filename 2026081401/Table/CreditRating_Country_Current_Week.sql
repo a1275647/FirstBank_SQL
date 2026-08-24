@@ -6,7 +6,7 @@ IF OBJECT_ID(N'[dbo].[CreditRating_Country_Current]', N'U') IS NULL
 
 IF OBJECT_ID(N'[dbo].[CreditRating_Country_Current_Week]', N'U') IS NULL
 BEGIN
-    CREATE TABLE [dbo].[CreditRating_Country_Current_Week]
+    DECLARE @FilegroupSql nvarchar(max) = N'CREATE TABLE [dbo].[CreditRating_Country_Current_Week]
     (
         [PK_Id]                               int            IDENTITY(1, 1) NOT NULL,
         [Year]                                 int                           NOT NULL,
@@ -25,13 +25,26 @@ BEGIN
         [Create_user]                          nvarchar(20)                     NULL,
         [PublishedAt]                          datetime                     NOT NULL,
         CONSTRAINT [PK_CreditRating_Country_Current_Week]
-            PRIMARY KEY CLUSTERED ([PK_Id]),
+            PRIMARY KEY CLUSTERED ([PK_Id]) ON [NCRMS_TAB],
         CONSTRAINT [UQ_CreditRating_Country_Current_Week_Period_Agency_Country]
-            UNIQUE ([Year], [Month], [Week], [FK_Country_Id], [FK_RatingAgency_Id])
-    );
+            UNIQUE NONCLUSTERED ([Year], [Month], [Week], [FK_Country_Id], [FK_RatingAgency_Id]) ON [NCRMS_IDX]
+    ) ON [NCRMS_TAB];';
 
-    CREATE INDEX [IX_CreditRating_Country_Current_Week_Year_Month_Week]
-        ON [dbo].[CreditRating_Country_Current_Week] ([Year], [Month], [Week]);
+    IF FILEGROUP_ID(N'NCRMS_TAB') IS NULL
+        SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_TAB]', N'[PRIMARY]');
+
+    IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+        SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+
+    EXEC sys.sp_executesql @FilegroupSql;
+
+    SET @FilegroupSql = N'CREATE INDEX [IX_CreditRating_Country_Current_Week_Year_Month_Week]
+        ON [dbo].[CreditRating_Country_Current_Week] ([Year], [Month], [Week]) ON [NCRMS_IDX];';
+
+    IF FILEGROUP_ID(N'NCRMS_IDX') IS NULL
+        SET @FilegroupSql = REPLACE(@FilegroupSql, N'[NCRMS_IDX]', N'[PRIMARY]');
+
+    EXEC sys.sp_executesql @FilegroupSql;
 END;
 ELSE
 BEGIN
