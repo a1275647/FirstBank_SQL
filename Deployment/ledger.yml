@@ -1,0 +1,64 @@
+schema_version: 1
+updated_on: "2026-08-24"
+
+# This ledger records deployment evidence separately from immutable SQL scripts.
+# A null deployed_commit or deployed_sha256 means the historical value still
+# needs to be recovered from the package that was actually executed.
+scripts:
+  - path: "2026081401/Table/CreditRating_Country_Current_Week.sql"
+    production_candidate:
+      commit: "adc883a0b5dfc6007fa57a03bb2caa423a3fd373"
+      sha256: "107f1cc62c2595789a74bd4a455b5c04c5c20bb358bf51570d116d6ec9586557"
+    environments:
+      company_test:
+        status: deployed
+        deployed_commit: null
+        deployed_sha256: null
+        deployed_at: null
+        confirmed_on: "2026-08-24"
+        confirmation_source: user_report
+        note: "Backfill the commit and checksum from the package that was actually executed."
+      client_test:
+        status: deployed
+        deployed_commit: null
+        deployed_sha256: null
+        deployed_at: null
+        confirmed_on: "2026-08-24"
+        confirmation_source: user_report
+        note: "Backfill the commit and checksum from the package that was actually executed."
+      client_production:
+        status: pending_approval
+        approval_ticket: null
+        deployed_commit: null
+        deployed_sha256: null
+        deployed_at: null
+        executed_by: null
+
+  - path: "2026081402/Table/CreditRating_Country_Score_Week.sql"
+    production_candidate:
+      commit: "adc883a0b5dfc6007fa57a03bb2caa423a3fd373"
+      sha256: "d6bf8e12311c88e3adb5bf7f4be30812bc3940efa11b02fe459d8a58fd4918d7"
+    environments:
+      company_test:
+        status: deployed
+        deployed_commit: null
+        deployed_sha256: null
+        deployed_at: null
+        confirmed_on: "2026-08-24"
+        confirmation_source: user_report
+        note: "Backfill the commit and checksum from the package that was actually executed."
+      client_test:
+        status: deployed
+        deployed_commit: null
+        deployed_sha256: null
+        deployed_at: null
+        confirmed_on: "2026-08-24"
+        confirmation_source: user_report
+        note: "Backfill the commit and checksum from the package that was actually executed."
+      client_production:
+        status: pending_approval
+        approval_ticket: null
+        deployed_commit: null
+        deployed_sha256: null
+        deployed_at: null
+        executed_by: null
