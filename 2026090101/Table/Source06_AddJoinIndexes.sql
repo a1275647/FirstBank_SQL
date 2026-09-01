@@ -1,0 +1,81 @@
+SET NOCOUNT ON;
+SET XACT_ABORT ON;
+
+-- usp_Souce06_By_FL_FLMST_D_MF 用到的三張來源表完全沒有索引（皆為 heap table）。
+-- FL_FLMST_D_MF：SP 用 FLMST_EXT_DATE = 最大日期 篩出當天快照，沒有索引代表每次執行
+-- 都要把整張歷史表掃過一遍才能找出最大日期那批資料。
+-- FM_FMLINE_D_MF：SP 用 (FMLINE_EXT_DATE, FMLINE_CUST_ID, FMLINE_BRANCH, FMLINE_APRV_NO)
+-- 對應回 FL_FLMST_D_MF 找額度資料，沒有索引代表 FL_FLMST_D_MF 每一列都要對 FM_FMLINE_D_MF
+-- 做一次全表掃描。
+-- DAILY_CIF_TMP：SP 用 CIF_ID_NO 對應客戶姓名，同樣沒有索引（這張表的 PK_DAILY_CIF_TMP
+-- 已在 2026082702 移除，目前是純 heap table）。
+--
+-- EL_ELLSTAPV_D_MF：SP 目前用 `--LEFT JOIN ELLSTAPV ELL ON ...` 註解掉、尚未啟用，但
+-- 2026082701 已經幫這張表補上 ELLSTAPV_EXT_DATE 欄位，未來啟用時的關聯鍵會是
+-- (ELLSTAPV_CUST_ID, ELLSTAPV_APRV_NO)，且既有的 DW 每日同步（DataMigrationByDwService）
+-- 已經在用 `WHERE ELLSTAPV_EXT_DATE == date` 篩選。這張表目前完全沒有索引，先一併補上，
+-- 避免未來啟用這段 JOIN 時又要重新補索引；FirstBank_Entity 裡對應的正確 Entity 是
+-- EL_ELLSTAPV_D_MF（不是 SP 註解裡寫的舊名 ELLSTAPV，那個沒有 ELLSTAPV_EXT_DATE 欄位）。
+--
+-- 注意：SP 最後一段「額度檔」UNION 分支是直接從 FM_FMLINE_D_MF 出發、LEFT JOIN 回
+-- FL_FLMST_D_MF 找「查無主檔」的額度，這段本來就沒有用 EXT_DATE 篩選、會掃過
+-- FM_FMLINE_D_MF 全部歷史資料，本索引無法改變這段的資料量，只能加速它與 FL_FLMST_D_MF
+-- 的比對；是否要幫這段也加上日期範圍限制屬於查詢邏輯調整，需另外與需求方確認，此處不動。
+
+IF OBJECT_ID(N'[dbo].[FL_FLMST_D_MF]', N'U') IS NULL
+    THROW 59200, N'缺少資料表 dbo.FL_FLMST_D_MF。', 1;
+IF OBJECT_ID(N'[dbo].[FM_FMLINE_D_MF]', N'U') IS NULL
+    THROW 59201, N'缺少資料表 dbo.FM_FMLINE_D_MF。', 1;
+IF OBJECT_ID(N'[dbo].[DAILY_CIF_TMP]', N'U') IS NULL
+    THROW 59202, N'缺少資料表 dbo.DAILY_CIF_TMP。', 1;
+IF OBJECT_ID(N'[dbo].[EL_ELLSTAPV_D_MF]', N'U') IS NULL
+    THROW 59206, N'缺少資料表 dbo.EL_ELLSTAPV_D_MF。', 1;
+
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[FL_FLMST_D_MF]') AND [name] = N'IX_FL_FLMST_D_MF_ExtDate')
+    THROW 59203, N'dbo.FL_FLMST_D_MF 已存在索引 IX_FL_FLMST_D_MF_ExtDate，請先確認是否已執行過本腳本。', 1;
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[FM_FMLINE_D_MF]') AND [name] = N'IX_FM_FMLINE_D_MF_JoinKey')
+    THROW 59204, N'dbo.FM_FMLINE_D_MF 已存在索引 IX_FM_FMLINE_D_MF_JoinKey，請先確認是否已執行過本腳本。', 1;
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DAILY_CIF_TMP]') AND [name] = N'IX_DAILY_CIF_TMP_CifIdNo')
+    THROW 59205, N'dbo.DAILY_CIF_TMP 已存在索引 IX_DAILY_CIF_TMP_CifIdNo，請先確認是否已執行過本腳本。', 1;
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[EL_ELLSTAPV_D_MF]') AND [name] = N'IX_EL_ELLSTAPV_D_MF_ExtDateJoinKey')
+    THROW 59207, N'dbo.EL_ELLSTAPV_D_MF 已存在索引 IX_EL_ELLSTAPV_D_MF_ExtDateJoinKey，請先確認是否已執行過本腳本。', 1;
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    CREATE NONCLUSTERED INDEX [IX_FL_FLMST_D_MF_ExtDate] ON [dbo].[FL_FLMST_D_MF]
+    (
+        [FLMST_EXT_DATE] ASC
+    )
+    WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX];
+
+    CREATE NONCLUSTERED INDEX [IX_FM_FMLINE_D_MF_JoinKey] ON [dbo].[FM_FMLINE_D_MF]
+    (
+        [FMLINE_EXT_DATE] ASC,
+        [FMLINE_CUST_ID] ASC,
+        [FMLINE_BRANCH] ASC,
+        [FMLINE_APRV_NO] ASC
+    )
+    WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX];
+
+    CREATE NONCLUSTERED INDEX [IX_DAILY_CIF_TMP_CifIdNo] ON [dbo].[DAILY_CIF_TMP]
+    (
+        [CIF_ID_NO] ASC
+    )
+    WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX];
+
+    CREATE NONCLUSTERED INDEX [IX_EL_ELLSTAPV_D_MF_ExtDateJoinKey] ON [dbo].[EL_ELLSTAPV_D_MF]
+    (
+        [ELLSTAPV_EXT_DATE] ASC,
+        [ELLSTAPV_CUST_ID] ASC,
+        [ELLSTAPV_APRV_NO] ASC
+    )
+    WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [NCRMS_IDX];
+
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF XACT_STATE() <> 0
+        ROLLBACK TRANSACTION;
+    THROW;
+END CATCH;
