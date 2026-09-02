@@ -33,13 +33,19 @@ RETURN
 				END SUM_TO_USD_LIMIT
 		from temp
 	),
+	-- 改成用「分行、國家別、資料日、上層核准編號(TOP_Permit_No)」分組，不再用個別額度自己的
+	-- 核准編號分組——同一條根額度底下可能拆成好幾個核准編號(PERMIT_NO)，用 PERMIT_NO 分組
+	-- 只會各自跟根額度上限比較，加總超過根額度的情況反而抓不到；要用根額度自己的識別碼
+	-- (TOP_Permit_No) 分組，才能把同一條根額度下所有子額度的美金核准額度全部加在一起再封頂。
+	-- TOP_Permit_No 為空時比照既有 PERMIT_NO 的防呆作法，退回用 PK_Id 當識別碼，避免同一批
+	-- 尚未帶入根額度資料的資料被誤判成同一組而合併加總。
 	temp3 as (
 		select *,
 			ROW_NUMBER() OVER(
-				PARTITION BY BRANCH_NO,ISNULL(NULLIF(LTRIM(RTRIM(PERMIT_NO)), ''), CAST(PK_Id AS NVARCHAR(20))),EXT_DATE ORDER BY PK_Id
+				PARTITION BY BRANCH_NO,COUNTRY_COD,EXT_DATE,ISNULL(NULLIF(LTRIM(RTRIM(TOP_Permit_No)), ''), CAST(PK_Id AS NVARCHAR(20))) ORDER BY PK_Id
 				) AS rn_final,
 			SUM(SUM_TO_USD_LIMIT) OVER (
-				PARTITION BY BRANCH_NO,ISNULL(NULLIF(LTRIM(RTRIM(PERMIT_NO)), ''), CAST(PK_Id AS NVARCHAR(20))),EXT_DATE
+				PARTITION BY BRANCH_NO,COUNTRY_COD,EXT_DATE,ISNULL(NULLIF(LTRIM(RTRIM(TOP_Permit_No)), ''), CAST(PK_Id AS NVARCHAR(20)))
 				) AS GroupTotal
 		FROM temp2
 	)
@@ -54,7 +60,8 @@ RETURN
 			end as SUM_TO_USD_LIMIT,
 			REVOLVE_MK,FIL9,
 			SOURCE,LIMIT_MATURITY,MATURITY_DATE,INDUSTRY,INDUSTRY_Type,PRODUCT_CODE,CUR_BOUGHT,CUR_SOLD,RISKFACTOR,
-			WEIGHTS,Create_DateTime,YEAR,MONTH,Week,EXT_DATE,TOP_Limit_USD_Amount
+			WEIGHTS,Create_DateTime,YEAR,MONTH,Week,EXT_DATE,
+			TOP_Limit_Amount,TOP_Limit_USD_Amount,TOP_Permit_No,TOP_Limit_Cod,TOP_Country_Cod,TOP_Limit_Maturity
 	FROM temp3
 )
 GO
