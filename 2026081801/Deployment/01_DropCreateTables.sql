@@ -4439,6 +4439,7 @@ GO
 DECLARE @FilegroupSql nvarchar(max) = N'';
 SET @FilegroupSql += N'CREATE TABLE [dbo].[DAILY_CIF_TMP](
 	[CIF_ID_NO] [char](11) COLLATE Chinese_Taiwan_Stroke_CI_AS NOT NULL,
+	[CIF_ID_SER_NO] [nvarchar](1) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[CIF_CUST_NAME] [char](40) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[CIF_NATION_CODE] [char](4) COLLATE Chinese_Taiwan_Stroke_CI_AS NULL,
 	[CIF_EXT_DATE] [date] NULL,
