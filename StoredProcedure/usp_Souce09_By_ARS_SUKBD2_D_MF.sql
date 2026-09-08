@@ -7,19 +7,20 @@ GO
 -- Create date: 2025/10/17
 -- Description:	09SUKBD2附買回之資料擷取 交易最大日期
 -- =============================================
-CREATE PROCEDURE [dbo].[usp_Souce09_By_ARS_SUKBD2_D_MF] @EXT_DATE DATE
+Alter PROCEDURE [dbo].[usp_Souce09_By_ARS_SUKBD2_D_MF] @EXT_DATE DATE
 AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
 
-        DECLARE @BufferDate INT = 14;
+		--Declare @EXT_DATE Date = '2026-09-01';
+		Declare @BufferDate INT = 14;
 
         INSERT INTO MonitorData (
             BRANCH_NO, UNIT_NO, PRODUCT_TYPE, TRAN_NO, GROUP_NO, TX_DATE,
             CUSTOMER_NAME, CUSTOMER_ID, COUNTRY_COD, CURENCY_COD, TRAN_AMOUNT,
             PERMIT_NO, LIMIT, LIMIT_COD, MATURITY_DATE, AS_OF_DATE, FIL9,
-            SOURCE, CREATOR, LIMIT_MATURITY, INDUSTRY, INDUSTRY_Type, EXT_DATE)
+            SOURCE, CREATOR, LIMIT_MATURITY, EXT_DATE)
         SELECT
             TRIM(MF.SUKBD2_BRANCH_NO)                                           AS BRANCH_NO,
             --TRIM(MF.SUKBD2_ACC_BRANCH_NO)                                       AS UNIT_NO,
@@ -42,19 +43,18 @@ BEGIN
             '09'                                                                 AS SOURCE,
             'system'                                                             AS CREATOR,
             MF.SUKBD2_END_DATE                                                   AS LIMIT_MATURITY,
-            TRIM(MF.BUSINS_CODE)                                                 AS INDUSTRY,
-            1                                                                    AS INDUSTRY_Type,
+            --TRIM(MF.BUSINS_CODE)                                                 AS INDUSTRY,
+            --1                                                                    AS INDUSTRY_Type,
             @EXT_DATE                                                            AS EXT_DATE
         FROM ARS_SUKBD2_D_MF MF
         WHERE MF.SUKBD2_EXT_DATE = (
                 SELECT MAX(SUKBD2_EXT_DATE)
                 FROM ARS_SUKBD2_D_MF
-                WHERE SUKBD2_EXT_DATE < @EXT_DATE
+                WHERE SUKBD2_EXT_DATE <= @EXT_DATE
               ) AND
               MF.SUKBD2_TRADE_TYPE <> 'RP' AND
               TRIM(MF.SUKBD2_ISSUER_COUNTRY) <> 'TW' AND
-              (MF.SUKBD2_END_DATE IS NULL OR
-               DATEADD(DAY, @BufferDate, MF.SUKBD2_END_DATE) >= @EXT_DATE);
+			  (MF.SUKBD2_END_DATE is null or DATEADD(DAY,@BufferDate,MF.SUKBD2_END_DATE) >= @EXT_DATE)
 
     END TRY
     BEGIN CATCH

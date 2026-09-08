@@ -12,7 +12,7 @@ GO
 -- TODO：CAL_TO_USD_AMT／CAL_TO_USD_LIMIT 的實際計算公式待補（依 WEIGHTS/RISKFACTOR
 --   套用規則），目前僅建立 SP 骨架與欄位落地位置，SET 子句先寫成 no-op。
 -- =============================================
-CREATE   PROCEDURE [dbo].[usp_UpdateMonitorDataCalculatedUsdAmount](@EXT_DATE AS DATE)
+Alter PROCEDURE [dbo].[usp_UpdateMonitorDataCalculatedUsdAmount](@EXT_DATE AS DATE)
 AS
 BEGIN
 	SET NOCOUNT ON;
@@ -20,9 +20,9 @@ BEGIN
 		UPDATE M
 		SET
 			-- TODO: 套用 WEIGHTS/RISKFACTOR 的計算公式，例如：
-			CAL_TO_USD_AMT = M.TO_USD_AMT * M.WEIGHTS * M.RISKFACTOR,
+			CAL_TO_USD_AMT = isnull(M.TO_USD_AMT,0)  * (isnull(M.RISKFACTOR,100)/100),
 			-- TODO: 套用 WEIGHTS/RISKFACTOR 的計算公式
-			CAL_TO_USD_LIMIT = M.TO_USD_LIMIT * M.WEIGHTS * M.RISKFACTOR
+			CAL_TO_USD_LIMIT = isnull(M.TO_USD_LIMIT,0) * (isnull(M.RISKFACTOR,100)/100)
 		FROM MONITORDATA M
 		WHERE M.EXT_DATE = @EXT_DATE;
 	END TRY
@@ -33,3 +33,6 @@ BEGIN
 	END CATCH
 END
 GO
+
+
+

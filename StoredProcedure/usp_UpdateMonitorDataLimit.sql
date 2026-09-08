@@ -7,12 +7,12 @@ GO
 -- Create date: 20260424
 -- Description:	更新指定轉檔日期MonitorData資料
 -- =============================================
-CREATE PROCEDURE [dbo].[usp_UpdateMonitorDataLimit] @EXT_DATE as date
+Alter PROCEDURE [dbo].[usp_UpdateMonitorDataLimit] @EXT_DATE as date
 AS
 BEGIN
 	SET NOCOUNT ON;
     BEGIN TRY
-		update m set LIMIT = TRAN_AMOUNT, TO_USD_LIMIT = TO_USD_AMT
+		update m set CAL_TO_USD_LIMIT = CAL_TO_USD_AMT
 		from MONITORDATA m
 		where m.EXT_DATE = @EXT_DATE AND LIMIT_MATURITY <= @EXT_DATE
 	END TRY
