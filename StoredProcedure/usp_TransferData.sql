@@ -35,7 +35,7 @@ BEGIN
 		exec usp_Souce09_By_ARS_SUKNIRS_D_MF @EXT_DATE -- 交易檔
 		exec usp_Souce09_By_ARS_SUKNMM_D_MF @EXT_DATE -- 交易檔
 		exec usp_Souce09_By_ARS_SUKSWP_D_MF @EXT_DATE -- 交易檔
-		exec usp_Souce01_OBBS_By_OS_LNSLMSD_D_MF -- 額度檔
+		exec usp_Souce01_OBBS_By_OS_LNSLMSD_D_MF @EXT_DATE -- 額度檔
 
 	END TRY
 	BEGIN CATCH
