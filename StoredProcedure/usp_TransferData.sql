@@ -16,7 +16,7 @@ BEGIN
 		IF @EXT_DATE IS NULL
 			THROW 50000, '@EXT_DATE 為空值', 1;
 		Delete MONITORDATA
-		Where DATADATE = @EXT_DATE
+		Where EXT_DATE = @EXT_DATE
 		-- DW 資料轉檔
 		exec usp_Souce01_OBBS_By_OS_LNSMSTD_D_MF @EXT_DATE -- 交易檔
 		exec usp_Souce01_OBBS_By_OSBDKF02_MF @EXT_DATE -- 交易檔
