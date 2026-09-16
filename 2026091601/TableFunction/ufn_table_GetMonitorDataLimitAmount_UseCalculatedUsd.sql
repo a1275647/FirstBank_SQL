@@ -1,13 +1,33 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
+
 -- =============================================
--- Author:		<Author,,Name>
--- Create date: <Create Date,,>
--- Description:	<Description,,>
+-- 2026091601 動態查詢改以計算後美金金額（CAL_TO_USD_AMT／CAL_TO_USD_LIMIT）為準
+--
+-- 1. SUM_TO_USD_LIMIT（佔用額度）改以 CAL_TO_USD_LIMIT 去重與取值，原本用 TO_USD_LIMIT。
+-- 2. 已到期額度（LIMIT_MATURITY <= EXT_DATE）不去重、每筆各算自己的 CAL_TO_USD_LIMIT：
+--    usp_UpdateMonitorDataLimit 會把到期列的 CAL_TO_USD_LIMIT 改成各筆交易餘額，
+--    再以「同核准編號同金額只算一次」去重會少算餘額相同的交易。
+-- 3. 輸出欄位補上 CAL_TO_USD_AMT、CAL_TO_USD_LIMIT，供 DimensionService 的全行額度動態查詢
+--    與 ExcelExportService 的兩支國家報表以 CAL_TO_USD_AMT 計算使用餘額。
+-- 4. 根額度封頂（TOP_Limit_USD_Amount）維持以原始美金金額比較，不乘風險係數。
+--
+-- 前置條件：MONITORDATA 已有 CAL_TO_USD_AMT／CAL_TO_USD_LIMIT 兩欄，且排程已依序執行
+-- usp_UpdateMonitorDataPruduct07RiskFactor／usp_UpdateMonitorDataCNWeights／
+-- usp_UpdateMonitorDataCalculatedUsdAmount／usp_UpdateMonitorDataLimit 補齊歷史資料。
 -- =============================================
-CREATE FUNCTION [dbo].[ufn_table_GetMonitorDataLimitAmount] (@Dates NVARCHAR(MAX))
+
+IF OBJECT_ID(N'[dbo].[MONITORDATA]', N'U') IS NULL
+    THROW 51601, N'缺少資料表 dbo.MONITORDATA。', 1;
+
+IF COL_LENGTH(N'dbo.MONITORDATA', N'CAL_TO_USD_AMT') IS NULL
+   OR COL_LENGTH(N'dbo.MONITORDATA', N'CAL_TO_USD_LIMIT') IS NULL
+    THROW 51602, N'dbo.MONITORDATA 缺少 CAL_TO_USD_AMT／CAL_TO_USD_LIMIT 欄位。', 1;
+GO
+
+CREATE OR ALTER FUNCTION [dbo].[ufn_table_GetMonitorDataLimitAmount] (@Dates NVARCHAR(MAX))
 RETURNS TABLE
 AS
 RETURN
