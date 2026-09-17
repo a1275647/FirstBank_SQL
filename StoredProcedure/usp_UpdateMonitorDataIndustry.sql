@@ -21,7 +21,7 @@ BEGIN
 						     when c.INDCODE is not null then 1
 							 else null
 						end
-		from MONITORDATA a
+		from MONITORDATA_STAGE a
 		left join INDUSTRY_Overseas b on b.BranchCode = left(dbo.ufn_CodePrefix(a.BRANCH_NO),3) and b.CustomerId = a.CUSTOMER_ID
 		left join INDUSTRY_Internal c on c.CustomerId = a.CUSTOMER_ID
 		where EXT_DATE = @EXT_DATE

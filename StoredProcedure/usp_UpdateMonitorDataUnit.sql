@@ -20,7 +20,7 @@ BEGIN
 					[YEAR] = YEAR(@EXT_DATE),
 					[Month] = MONTH(@EXT_DATE),
 					[Week] = dbo.ufn_GetWeekOfMonth(@EXT_DATE)
-		from MONITORDATA m
+		from MONITORDATA_STAGE m
 		left join BankGroup a on left(dbo.ufn_CodePrefix(a.GroupCode),3) = m.GROUP_NO
 		left join BankUnit b  on left(dbo.ufn_CodePrefix(b.UnitCode),3) = m.UNIT_NO
 		left join BankBranch c on left(dbo.ufn_CodePrefix(c.BankCode),3) = m.BRANCH_NO AND

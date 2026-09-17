@@ -29,16 +29,17 @@ BEGIN
 			('BANK OF CHINA LIMITED TAIPEI BRANCH');
 		-- 中國風險加權計算方式
 		-- 1. 指定客戶 為 0
-		-- 2. 到期日天數 小於 92 為 20
+		-- 2. 產品別 04、09 且到期日天數 小於 92 為 20（其他產品別不適用短天期減權）
 		-- 3. 其餘 100
 		UPDATE M SET WEIGHTS = CASE WHEN EXISTS (
 											SELECT 1
 											FROM @ExcludedCustomers e
 											WHERE e.CustomerName = M.CUSTOMER_NAME
 										) THEN '0'
-									WHEN DATEDIFF(DAY,@EXT_DATE,M.MATURITY_DATE) < 92 THEN 20
+									WHEN M.PRODUCT_TYPE IN ('04','09')
+										 AND DATEDIFF(DAY,@EXT_DATE,M.MATURITY_DATE) < 92 THEN 20
 									ELSE 100 END
-		FROM MONITORDATA M
+		FROM MONITORDATA_STAGE M
 		WHERE M.EXT_DATE = @EXT_DATE AND COUNTRY_COD = 'CN'
 	END TRY
     BEGIN CATCH
